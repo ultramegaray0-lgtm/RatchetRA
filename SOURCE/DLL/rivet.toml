@@ -1,0 +1,34 @@
+# rivet_hook config for the Rift Apart randomizer (rivet_hook 2.0.x). Keys not listed use
+# defaults; on exit rivet_hook rewrites this file with every setting and comment (that is fine).
+
+[overlay]
+enabled = true          # REQUIRED: rivet_hook only finds the hero and forwards F9 with the
+                        # overlay on. Its window stays hidden until F3.
+
+[scripts]
+enabled = true
+path = "scripts"
+reload_key = 19         # Pause key (F6 was too easy to press by accident)
+
+[bridge]
+enabled = true          # lets the randomizer companion save/restore progress (local named pipe)
+pipe_name = "rivet_hook"
+
+[assets]
+enabled = true
+# Loose asset mods load ONLY from the folders / .stage files listed here (a missing one is skipped,
+# rivet.log: "mod path ... does not exist! skipping."). The rivet_hook version of ARSENAL_RESTORED
+# goes in <game>\mods\ARSENAL_RESTORED (the folder holding its info.json) or
+# Add an optional ARSENAL_RESTORED folder or .stage path here if you have that mod.
+# The Overstrike version of ARSENAL_RESTORED needs nothing here.
+paths = ["mods/default", "mods/ARSENAL_RESTORED", "mods/ARSENAL_RESTORED.stage"]
+
+[log]
+paths = false           # this "paths" is an on/off switch, not a list
+
+[renderdoc]
+# Not RenderDoc: this is rivet_hook's only setting that loads an extra DLL. It loads the
+# randomizer's helper rando_give.dll (put it next to RiftApart.exe), which lets the randomizer
+# put rewards into your inventory on every planet. Set enabled = false to switch it off.
+enabled = true
+dll_path = "rando_give.dll"
