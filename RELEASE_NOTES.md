@@ -39,6 +39,10 @@ Full guide: `INSTALLATION.md` in the ZIP.
 ## Known issues
 
 - v0.55 has been checked with automated tests (a game simulator), **not yet in the real game**.
+- The exact Steam build used in development is not confirmed (see KNOWN_ISSUES). If `rivet.log`
+  says `refused this exe`, your game build differs; please report your `RiftApart.exe` version.
+  A rivet_hook message `game version mismatch, invalidating pointers` alone was harmless on the
+  development install.
 - Some starting items may arrive only after the parade, once you reach Nefarious City.
 - Ms. Zurkon's shop may stay unchanged; the seed's shop weapons are then given to you directly.
 

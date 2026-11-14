@@ -6,6 +6,12 @@
   package validator). v0.55 has **not yet been played in the real game.** The randomizer logic
   it is built on was played in the game as v0.54.
 - Only one Windows PC and one game install have been used in development.
+- **Exact game build not confirmed:** the docs name Steam v3.630.1.0, but the development logs
+  do not record the `RiftApart.exe` file version, and on that install rivet_hook printed
+  `game version mismatch, invalidating pointers` while the randomizer still worked.
+  `rando_give.dll` checks the game's code itself: if `rivet.log` says `refused this exe`, your
+  build differs. If you see that, please report your exe's file version (right-click
+  `RiftApart.exe` → Properties → Details).
 
 ## Known issues
 
