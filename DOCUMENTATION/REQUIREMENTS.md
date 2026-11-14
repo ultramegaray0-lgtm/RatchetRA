@@ -1,23 +1,22 @@
-# Requirements
+# Requirements: v0.55
 
-The exact requirements must be confirmed against the final release package. This page intentionally avoids guessing versions or dependencies.
+| Component | Version | Where | Bundled? |
+|---|---|---|---|
+| Ratchet & Clank: Rift Apart | Steam, v3.630.1.0 (`RiftApart.exe` file version 3.0630.1.0) | Steam | No |
+| Windows | 10 or 11, 64-bit | — | — |
+| rivet_hook (mod loader) | 2.0.1; 2.0.0 also works | https://github.com/neptuwunium/rivet_hook/releases (source: https://codeberg.org/neptuwunium/rivet_hook) | **No. Required.** Another author's project (EUPL-1.2); install it yourself |
+| Windows PowerShell | 5.1 (part of Windows); PowerShell 7 also works | already installed | — |
+| `rando_give.dll` | v6 (SHA-256 `efb92723…40092c12`) | in the player ZIP | Yes. **Required**: it puts rewards into your inventory |
+| The companion (`rando_companion`) | v0.55 | in the player ZIP | Yes. **Required** with the default random seed; it saves your progress |
+| `15_rando_hub.lua` | v0.55 | in the player ZIP | Yes. Optional: without it there is no planet shuffle |
+| ARSENAL_RESTORED | any | its own mod page | No. Optional |
 
-Before release, list each required component with:
-- Exact name.
-- Required version or tested version range.
-- Official download or project page.
-- Whether it is bundled or must be installed separately.
-- Any setup steps or compatibility limitations.
+## Not supported or not tested
 
-## Game
-
-- Ratchet & Clank: Rift Apart for PC.
-- Specify the supported game build/version before publishing a release.
-
-## Modding framework and runtime dependencies
-
-Add the exact mod loader, hook/runtime framework, and any other required tools here after verifying the release package. Clearly distinguish required dependencies from optional tools.
-
-## System compatibility
-
-Document tested operating systems and hardware limitations only when they have actually been tested.
+- **Other game versions:** not supported. `rando_give.dll` checks the game's code and does nothing
+  if it differs, so most rewards cannot arrive. A game patch needs a randomizer update.
+- **Epic Games Store version:** not tested.
+- **Steam Deck / Linux (Proton):** not supported.
+- **Mod managers (Vortex, Overstrike):** install by hand. Overstrike is still fine for other
+  `.stage` mods.
+- **Mods that change weapons, the shop, item configs or missions:** may conflict.

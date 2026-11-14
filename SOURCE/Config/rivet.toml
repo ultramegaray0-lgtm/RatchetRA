@@ -2,8 +2,8 @@
 # defaults; on exit rivet_hook rewrites this file with every setting and comment (that is fine).
 
 [overlay]
-enabled = true          # REQUIRED: rivet_hook only finds the hero and forwards F9 with the
-                        # overlay on. Its window stays hidden until F3.
+enabled = true          # REQUIRED: rivet_hook only finds the hero and forwards key presses with
+                        # the overlay on. Its window stays hidden until F3.
 
 [scripts]
 enabled = true
@@ -19,7 +19,7 @@ enabled = true
 # Loose asset mods load ONLY from the folders / .stage files listed here (a missing one is skipped,
 # rivet.log: "mod path ... does not exist! skipping."). The rivet_hook version of ARSENAL_RESTORED
 # goes in <game>\mods\ARSENAL_RESTORED (the folder holding its info.json) or
-# Add an optional ARSENAL_RESTORED folder or .stage path here if you have that mod.
+# <game>\mods\ARSENAL_RESTORED.stage (install it with its own instructions).
 # The Overstrike version of ARSENAL_RESTORED needs nothing here.
 paths = ["mods/default", "mods/ARSENAL_RESTORED", "mods/ARSENAL_RESTORED.stage"]
 

@@ -1,28 +1,39 @@
-# Build Instructions
+# Build instructions: v0.55
 
-**Status:** Pending source upload and verification. These are not yet executable build instructions.
+Only one part of the mod is compiled: `rando_give.dll`. Everything else (Lua scripts, companion,
+`rivet.toml`) is used as it is in this repository.
 
-A complete build guide must be based on the actual project files and must allow another person to build the distributed component from a clean checkout.
+## rando_give.dll
 
-## Information to provide
+Source: [`SOURCE/DLL`](../SOURCE/DLL). It is built without the Windows SDK and without a C
+runtime, on Linux (or WSL) with LLVM.
 
-1. Supported operating system and architecture.
-2. Required compiler, SDK, runtime, and exact versions.
-3. Required third-party dependencies and how to obtain them.
-4. Project/solution files and build configuration.
-5. Exact commands or IDE steps for a clean build.
-6. Expected output filenames and locations.
-7. Any post-build steps.
-8. How to compare the locally built output with the distributed release.
+1. Install LLVM: `clang`, `lld-link` and `llvm-dlltool` (tested with clang/lld 18.1.3 on Ubuntu).
+2. Build:
+   ```
+   sh SOURCE/DLL/build.sh
+   ```
+   Output: `SOURCE/DLL/out/rando_give.dll`.
+3. Compare with the released file:
+   ```
+   sha256sum SOURCE/DLL/out/rando_give.dll
+   ```
+   Expected: `efb927232f67b7740aec473afa3866dd50636e1c29d0b2822717116a40092c12`.
 
-## Clean-build verification
+The build is reproducible: the link timestamp is fixed in `build.sh`. A clean build from this
+repository with clang/lld 18.1.3 was compared with the v0.55 player ZIP's DLL and is
+byte-identical.
 
-Before publishing:
-- Start from a fresh checkout.
-- Follow only the documented steps.
-- Confirm that all dependencies are identified.
-- Build without relying on files from the developer's machine.
-- Record warnings and known limitations.
-- Verify the output and document whether the build is reproducible.
+## The player ZIP
 
-Do not publish secrets, machine-specific paths, private SDKs, or proprietary game files as part of the source repository.
+The ZIP's `GAME_FOLDER` is assembled from this repository:
+
+| In the ZIP | From |
+|---|---|
+| `GAME_FOLDER/scripts/*.lua` (13 files) | `SOURCE/Lua/*.lua` |
+| `GAME_FOLDER/rando_give.dll` | the build above |
+| `GAME_FOLDER/rando_companion/Start-Companion.bat`, `RandoCompanion.ps1` | `SOURCE/Companion/` |
+| `GAME_FOLDER/rivet.toml` | `SOURCE/Config/rivet.toml` |
+
+Every file in the ZIP is listed with its SHA-256 in the ZIP's `SHA256SUMS.txt`, so you can check
+that the released files match this repository.

@@ -9,7 +9,7 @@
 --   mission_control = { verified = true, backend = "native" },   -- rando_give.dll v4
 --   travel = { verified = true },
 --   new_game_init = { verified = true },
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["06_rando_capabilities"] = "10.0.5"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["06_rando_capabilities"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
 RANDO_CAPABILITIES = {
   source = nil,
   mission_read = { verified = false },

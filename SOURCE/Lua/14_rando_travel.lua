@@ -14,9 +14,9 @@
 --     travel (Nefarious City -> Sargasso) and loading a save all come without a planet-menu event.
 --   * If no checkpoint to go back to is known, or the warp fails, the planet stays playable and
 --     its rewards wait for its Coordinates instead (the 6.0 "banked" rule) - said on screen.
---   * Escape hatch: Ctrl+F9 twice opens the planet you were last sent back from (its Coordinates
---     are given, marked [OPENED BY HAND] in the history). The solver makes it unnecessary; it is
---     there in case the game's story differs from the model somewhere.
+--   * Escape hatch (developer key, dev(keys).lua): T.hatch opens the planet you were last sent back
+--     from (its Coordinates are given, marked [OPENED BY HAND] in the history). The solver makes it
+--     unnecessary; it is there in case the game's story differs from the model somewhere.
 --   * levels_runtime = false in 04_rando_settings.lua turns the warp off (rewards wait instead).
 -- Nothing here changes the game's files, missions or saves; a warp moves the save's checkpoint to
 -- the planet you came from, which is where you were anyway.
@@ -27,15 +27,14 @@
 -- game listed match hashes in your rounds 13-23 logs, e.g. CHK_NEFCITY_START = 2052464476 and
 -- CHK_ZURK_00_DEFAULT = 2229284024. Every name the catalog lists is hashed, so each triggered
 -- checkpoint is logged by name (RANDO-CHECKPOINT) and the hub knows where a mission really starts.
--- In a hub seed (15_rando_hub.lua) the hub handles every arrival itself; this file's send-back is
--- used by 7.0-9.0 style seeds.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["14_rando_travel"] = "10.0.5"   -- the kit check (10_rando_runtime.lua)
+-- In a hub seed the hub (15_rando_hub.lua) handles arrivals itself while planet shuffle runs; with
+-- planet shuffle off, or without the hub, a hub seed's travel is never locked (T.active).
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["14_rando_travel"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_TRAVEL = RANDO_TRAVEL or {}
 local T = RANDO_TRAVEL
 local DB = RANDO_DATA
 local function log(...) pcall(rivet.log, "[rando]", "RANDO-TRAVEL", ...) end
-local function R() return RANDO end
 local function S() return RANDO and RANDO.state end
 local function SEED() return RANDO_SEED end
 local function say(text, opts) if RANDO and RANDO.say then RANDO.say(text, opts) end end
@@ -55,8 +54,9 @@ function T.active()
   local seed, s = SEED(), S()
   if not (seed and s and seed.travel_lock) then return false end
   if RANDO and RANDO.config and RANDO.config.levels_runtime == false then return false end
-  -- v0.54: planet shuffle switched off with the 0 key: no planet is locked either
-  if RANDO_HUB and RANDO_HUB.shuffle_off and RANDO_HUB.shuffle_off() then return false end
+  -- a hub seed locks travel only while the hub runs planet shuffle (OFF by default, and never
+  -- without 15_rando_hub.lua): otherwise travel is the game's own and rewards wait for Coordinates
+  if seed.hub and not (RANDO.hub_active and RANDO.hub_active()) then return false end
   return true
 end
 
@@ -444,7 +444,7 @@ function T.on_arrival(pid, from)
     log("arrived on", pid, "(open) at", tostring(p.dest))
     return false
   end
-  -- 8.2 test travel (16_rando_testtravel.lua): nothing is sent back while it is on
+  -- test travel (dev(testtravel).lua, a developer tool): nothing is sent back while it is on
   local TT = RANDO_TEST_TRAVEL
   if TT and TT.on and TT.on() then
     if p.dest then T.remember(pid, p.dest) end
@@ -546,7 +546,7 @@ function T.tick(frame, ready)
   end
 end
 
--- Ctrl+F9 twice: open the planet you were last sent back from
+-- the escape hatch (dev(keys).lua: Ctrl+; twice): open the planet you were last sent back from
 local hatch_at = -100
 function T.hatch()
   local tr = state()

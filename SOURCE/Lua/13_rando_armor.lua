@@ -14,7 +14,7 @@
 --     giving it (an older DLL, interception off, a source the table missed) still collects its
 --     source, so nothing is ever lost - you then simply keep the game's own piece as well.
 -- Pieces owned before the seed started (the 30 of the Deluxe Edition and free sets) never count.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["13_rando_armor"] = "10.0.5"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["13_rando_armor"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_ARMOR = RANDO_ARMOR or {}
 local A = RANDO_ARMOR

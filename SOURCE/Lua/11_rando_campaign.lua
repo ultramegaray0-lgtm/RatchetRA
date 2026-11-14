@@ -15,7 +15,7 @@
 --   * The game does not report mission states when a save loads (round 14), so the director
 --     asks the game (query) instead of waiting for events.
 --   * Travel (rivet.fly / rivet.warp) has not been used by the randomizer in your game yet.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["11_rando_campaign"] = "10.0.5"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["11_rando_campaign"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
 RANDO_CAMPAIGN_RT = RANDO_CAMPAIGN_RT or {}
 local D = RANDO_CAMPAIGN_RT
 local C = RANDO_CAMPAIGN
@@ -468,7 +468,8 @@ function D.on_mission(name, state)
     if nxt then
       local why = D.blocked(nxt)
       say(string.format("Campaign %d/%d: next is %s%s", cs.pos, #seed().campaign.order, nxt.title or nxt.id,
-                        why and (" - " .. why) or " - press " .. D.KEY .. " to travel"), { type = "center", duration = 8 })
+                        why and (" - " .. why) or (RANDO_DEV_KEYS and (" - press " .. R.key("key_campaign") .. " to travel") or "")),
+          { type = "center", duration = 8 })
     else
       say("Campaign complete!", { type = "planet", duration = 8 })
     end
@@ -626,30 +627,8 @@ pcall(rivet.on_frame, function()
   end
 end)
 
-D.KEY = (R and R.config and R.config.key_campaign) or "F12"
-local function vk_of(name)          -- 8.3: keyboard keys through the runtime's resolver
-  if R and R.vk then local v = R.vk(name); return v ~= nil, v end
-  return pcall(rivet.key, name)
-end
-local function ctrl_down()
-  local ctrl = false
-  pcall(function() ctrl = rivet.is_key_down(rivet.key("CONTROL")) end)
-  return ctrl
-end
--- 8.3: the setting's key, and the old F12 too while legacy_f_keys is on
-D.KEYS = { D.KEY }
-if R and R.config and R.config.legacy_f_keys and D.KEY ~= "F12" then D.KEYS[2] = "F12" end
-for _, name in ipairs(D.KEYS) do
-  local okk, vk = vk_of(name)
-  if okk then pcall(rivet.on_key, vk, function()
-    if ctrl_down() then return end
-    local ok, err = pcall(D.go)
-    if not ok then log("RANDO-ERROR campaign key", tostring(err)) end
-  end) end
-end
-
 -- ---------------------------------------------------------------------------------------------
--- the lab (test mode, a SPARE save). Ctrl+F12 only asks; Ctrl+F11 changes the spare save's story.
+-- the lab (dev(testmode).lua, a SPARE save): D.lab_read only asks; D.lab_try changes the spare save's story.
 -- Lines tools/build_capabilities.py turns into 06_rando_capabilities.lua:
 --   RANDO-LAB VERIFIED read (N missions answered, system S)
 --   RANDO-LAB VERIFIED native start (mission X went 1 -> 2)
@@ -795,24 +774,6 @@ function D.lab_travel()
   if not cp then log("RANDO-LAB no landing checkpoint known for", seg.planet); return end
   local ok = D.travel(cp, "fly")
   if not ok then D.travel(cp, "warp") end
-end
-
-if RANDO_TEST_MODE then
-  for _, name in ipairs(D.KEYS) do
-    local okc, vc = vk_of(name)
-    if okc then pcall(rivet.on_key, vc, function()
-      if not ctrl_down() then return end
-      local ok, err = pcall(D.lab_read)
-      if not ok then log("RANDO-ERROR lab read", tostring(err)) end
-    end) end
-  end
-  local okt, vt = pcall(rivet.key, "F11")
-  if okt then pcall(rivet.on_key, vt, function()
-    if not ctrl_down() then return end
-    local ok, res, msg = pcall(D.lab_try)
-    if not ok then log("RANDO-ERROR lab try", tostring(res)) end
-    say("[LAB] mission experiment: " .. tostring(msg or res), { type = "center", duration = 6 })
-  end) end
 end
 
 log("RANDO-CAMPAIGN director loaded", CAPS.source and ("capabilities: " .. CAPS.source) or "capabilities: none verified yet")

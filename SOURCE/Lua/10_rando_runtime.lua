@@ -1,51 +1,41 @@
--- Rift Apart Randomizer 10.0 runtime for rivet_hook (Lua 5.4).
+-- Rift Apart Randomizer runtime for rivet_hook (Lua 5.4).
 --
--- Files (rivet_hook loads scripts/*.lua in name order into one VM):
---   01_rando_data.lua       game database (items, locations, planets) built from your game files
---   02_rando_generator.lua  seed generator, progression solver, spoiler log
---   03_rando_campaign.lua   3.0 campaign registry, campaign orders, campaign constraints
---   04_rando_settings.lua   your seed and options (RANDO_SETTINGS)
---   05_rando_bindings.lua   event-name bindings (planets, missions, collectibles)
---   06_rando_capabilities.lua  what mission control may do in your game (verified paths only)
---   09_rando_real.lua       puts rewards into the game's real inventory (rando_give.dll)
---   10_rando_runtime.lua    this file
---   11_rando_campaign.lua   3.0 campaign director, mission control, campaign research
---   12_rando_shop.lua       5.0 the weapon vendor's own weapons, shuffled over its slots
---   13_rando_armor.lua      5.0 armor sources: the game's armor rewards become locations
---   14_rando_travel.lua     7.0 locked levels: a planet's travel needs its Coordinates
---   15_rando_hub.lua        10.0 hub (v0.51: Nefarious City): mission selection and planet shuffle
---   16_rando_testtravel.lua 8.2 test travel (off unless test_travel = true)
+-- rivet_hook loads scripts/*.lua in name order into one Lua VM:
+--   01_rando_data.lua          game database (items, locations, planets)
+--   02_rando_generator.lua     seed generator, progression solver, spoiler log
+--   03_rando_campaign.lua      mission registry and the hub's destination plan
+--   04_rando_settings.lua      the player's seed and options (RANDO_SETTINGS)
+--   05_rando_bindings.lua      event-name bindings (planets, missions, collectibles)
+--   06_rando_capabilities.lua  mission-control paths verified in the game
+--   09_rando_real.lua          puts rewards into the real inventory (rando_give.dll)
+--   10_rando_runtime.lua       this file: state, rewards, saving, keys, the kit check
+--   11_rando_campaign.lua      mission state reads and calls (rando_give.dll)
+--   12_rando_shop.lua          Ms. Zurkon's shop slots and prices
+--   13_rando_armor.lua         armor sources become reward locations
+--   14_rando_travel.lua        locked travel and checkpoint names
+--   15_rando_hub.lua           OPTIONAL: planet shuffle (the Nefarious City hub)
+--   dev(*).lua                 developer tools only; never part of a release (see R.kit_check)
 --
--- What happens in the game:
---   1. The seed is generated from your settings over the first frames (a few milliseconds of
---      work, sliced so no frame is held up). Events that arrive meanwhile are kept and replayed.
---   2. The companion restores this seed's progress (or starts it fresh). The starting inventory
---      (always Hoverboots and the Map-O-Matic, plus the seed's random weapons and gadget) is
+-- How a run works:
+--   1. The seed is generated over the first frames (sliced, so no frame is held up). Events that
+--      arrive meanwhile are replayed afterwards.
+--   2. The companion restores this seed's progress or starts it fresh. The starting inventory is
 --      handed out once per playthrough.
---   3. NEW GAME: when the game's prologue starts (MIS_INTRO objective OBJ_INTRO_PARADE_START_CINE,
---      seen only on a new game in rounds 14 and 15), the seed's progress starts over and the
---      starting inventory is handed out again. The companion keeps the previous run's file.
---   4. Game events complete locations: each Gold Bolt you pick up gives exactly ONE item, at
---      once. Story missions, side activities and armor sources (pocket dimensions, Zurkie's
---      challenges, the Lorb monk) give theirs; a location without an item gives Bolts or
---      Raritanium (filler). Optional: collectibles.
---   5. Levels (7.0, travel_lock): flying to a planet without its Coordinates sends you back
---      (14_rando_travel.lua). With planet_locks alone (or if a warp is impossible) a planet's mission
---      rewards wait for its Coordinates instead (Gold Bolts never wait).
---   6. The weapon vendor sells its own weapons shuffled over its slots (12_rando_shop.lua).
---      Ammo and upgrades are not touched; 4.0's vendor lock is gone.
---   7. 10.0 (hub = true): NEW GAME goes to the hub after the parade's wrench (v0.51: Nefarious
---      City, once the parade has handed Ratchet back; the city's story starts there). The Battle
---      Arena is open from the start too, and every other destination opens with its planet's
---      Coordinates (15_rando_hub.lua). hub = false: the 9.0 story start.
+--   3. NEW GAME (MIS_INTRO / OBJ_INTRO_PARADE_START_CINE starts) starts the seed's progress over.
+--   4. Game events complete locations: every Gold Bolt gives one item at once; story missions,
+--      side activities and armor sources give theirs; a location without an item gives Bolts or
+--      Raritanium.
+--   5. Planet shuffle (hub seeds with 15_rando_hub.lua) is OFF until the player presses 0. While it
+--      is off, or when 15_rando_hub.lua is not installed, travel and the story are the game's own
+--      and planet rewards wait for that planet's Coordinates.
 -- Engine calls are wrapped in pcall; errors are logged as RANDO-ERROR and never switch the
 -- randomizer off.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["10_rando_runtime"] = "10.0.5"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["10_rando_runtime"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
 
 RANDO = RANDO or {}
 local R = RANDO
-R.KIT_VERSION = "10.0.5"
-R.RELEASE = "v0.54"                 -- the public release this kit belongs to (the start banner)
+R.KIT_VERSION = "10.0.6"
+R.RELEASE = "v0.55"                 -- the public release this kit belongs to (the start banner)
 local DB = RANDO_DATA
 local GEN = RANDO_GEN
 local BIND = RANDO_BINDINGS or {}
@@ -102,63 +92,54 @@ if not (DB and GEN) then
 end
 
 -- ---------------------------------------------------------------------------------------
--- player settings (04_rando_settings.lua): runtime options here, randomization options go
--- to the generator (which validates them)
+-- runtime options. 04_rando_settings.lua may set any of these; everything else in it goes to
+-- the generator (which validates it). Most of these are internal switches the player file does
+-- not list; the defaults are the tested behaviour.
 -- ---------------------------------------------------------------------------------------
 R.config = {
-  discovery = true, discovery_cap = 60, log_notifications = true,
-  key_status = ";", key_campaign = "'",       -- 8.3: keyboard keys (were F9 / F12)
-  real_items = true, real_weapons = true, auto_equip_armor = false,
+  discovery = true, discovery_cap = 60,  -- log the game events the randomizer listens to (RANDO-DISCOVER)
+  log_notifications = true,              -- every HUD message is also written to rivet.log
+  real_items = true, real_weapons = true, -- put rewards into the real inventory (09_rando_real.lua)
   new_game_reset = true,             -- a new game starts the seed's progress over
   armor_intercept = true,            -- armor sources give the seed's item instead of their own piece
   shop_runtime = true,               -- apply the seed's shop shuffle to the vendor in memory
-  levels_runtime = true,             -- 7.0: send you back from a locked planet (false: its rewards wait)
-  -- 8.2 test travel (16_rando_testtravel.lua): go to any planet, whatever Coordinates you hold
-  test_travel = false,               -- true: F7 / F8 / Ctrl+F7 / Ctrl+F8 work and nothing sends you back
-  key_test_travel = ".",            -- . next planet, Ctrl+. warp there (8.3; was F7)
-  key_test_point = ",",              -- , next landing point on that planet, Ctrl+, fly there with the ship (was F8)
-  legacy_f_keys = true,              -- the old F5-F9 / F12 keys keep working as well
-  -- 10.0 hub (15_rando_hub.lua; only for a hub seed). v0.51: the hub is Nefarious City
+  shop_close_slots = true,           -- closed vendor slots show the Burst Pistol (false: their own weapon)
+  levels_runtime = true,             -- locked travel sends you back from a locked planet (false: rewards wait)
+  restore_inventory = true,          -- after the hub's own trips, give items back when the load lost most of them
+  key_shuffle = "0",                 -- the one player key: planet shuffle on/off, Ctrl+0 twice gives items back
+  -- the hub (15_rando_hub.lua; hub seeds only)
   hub_runtime = true,                -- false: no hub actions at all (no warps, no mission calls)
   hub_trigger = "parade",            -- New Game: go to the hub once the parade hands Ratchet back after his
-                                     -- wrench (v0.51) | "wrench": at the wrench (10.0-v0.5) | "cinematic"
-  hub_prologue = "end",              -- v0.51: "end" writes the prologue complete once you are at the hub (as
-                                     -- the game has it before Nefarious City) | "keep": leave it to choose
-  hub_start_story = true,            -- v0.51: the hub's first warp starts Nefarious City's story there
-  hub_prologue_timing = "before",    -- v0.52: "before" writes the prologue complete before the city's story
-                                     -- starts (the game's order, round 23) | "after": once on the city (v0.51)
-  hub_opening = true,                -- v0.52: load a story at its opening scene (C.OPENINGS) while it waits at
-                                     -- its first step | false: at its start checkpoint (v0.51)
+                                     -- wrench | "wrench": at the wrench | "cinematic": at once
+  hub_prologue = "end",              -- "end": the prologue is written complete at the hub | "keep": a destination
+  hub_start_story = true,            -- the hub's first warp starts Nefarious City's story there
+  hub_prologue_timing = "before",    -- the prologue ends before the city's story starts | "after"
+  hub_opening = true,                -- load a story at its opening scene (C.OPENINGS) | false: its start checkpoint
   hub_force_missions = true,         -- a destination's inactive story mission is made available, then started
   hub_replay = true,                 -- if starting fails, try the game's replay call
   hub_levels = "all",                -- "all": set every level bit UnlockLevelAction can set | "off"
   hub_travel_flag = true,            -- turn planetary travel on (the ship's planet menu)
   hub_fly = true,                    -- to a landing (not a mission's start), fly when a ship answers
   hub_auto_return = true,            -- a finished destination takes you back to the hub
-  hub_return_delay = 12,             -- seconds before that ([ cancels)
-  restore_inventory = true,          -- v0.54: after the hub's own trips, give your items back when the load
-                                     -- reports fewer than half of your weapons (Ctrl+0 twice does it by hand)
+  hub_return_delay = 12,             -- seconds before that
   hub_hero_swap = true,              -- a destination's hero is set before its story starts
   hub_follow_story = false,          -- true: when the game's own story takes you to an open destination, play it
-  key_hub = "]",                     -- ] next destination, Ctrl+] go
-  key_hub_return = "[",              -- v0.54: [ cancels the automatic return (it no longer goes back to the
-                                     -- hub), Ctrl+[ twice finish a destination by hand
-  key_story = "/",                   -- / start the story of the planet you are on
-  key_shuffle = "0",                 -- v0.54: 0 planet shuffle off / on (remembered), Ctrl+0 twice give your
-                                     -- items back
-  shop_close_slots = true,           -- 10.0: closed vendor slots show the Burst Pistol (false: their own weapon)
+  -- developer keys and test travel: only used by the dev(*).lua files
+  key_status = ";", key_campaign = "'", key_hub = "]", key_hub_return = "[", key_story = "/",
+  key_test_travel = ".", key_test_point = ",", legacy_f_keys = true, test_travel = false,
 }
 R.CHOICES = { hub_trigger = { parade = true, wrench = true, cinematic = true }, hub_levels = { all = true, off = true },
               hub_prologue = { ["end"] = true, keep = true }, hub_prologue_timing = { before = true, after = true } }
--- options that no longer exist
-local RETIRED_RUNTIME = { key_shop_next = "is not used since 4.0", key_shop_buy = "is not used since 4.0",
-                          lock_vendor_weapons = "is not used since 5.0 (the vendor sells its own weapons, shuffled; ammo works)" }
--- 10.0: options of the 8.x hub that the 10.0 hub does not have
-RETIRED_RUNTIME.hub_intro = "is not used since 10.0: v0.51's hub_prologue (\"end\" or \"keep\") decides what happens to the prologue"
-RETIRED_RUNTIME.story_on_arrival = "is not used in 10.0: a planet-menu landing on an open planet starts its next destination"
-RETIRED_RUNTIME.story_prime_before_travel = "is not used in 10.0: a destination's mission is always made active before the trip"
-RETIRED_RUNTIME.story_reload_stuck = "is not used in 10.0: a story waiting at its first step is loaded once more on the same planet"
-RETIRED_RUNTIME.story_restart_stuck = RETIRED_RUNTIME.story_reload_stuck
+-- options of older kits: a settings file that still has one gets a note in rivet.log
+local RETIRED_RUNTIME = {
+  key_shop_next = "is not used since 4.0", key_shop_buy = "is not used since 4.0",
+  lock_vendor_weapons = "is not used since 5.0 (the vendor sells its own weapons, shuffled; ammo works)",
+  hub_intro = "is not used since 10.0: hub_prologue decides what happens to the prologue",
+  story_on_arrival = "is not used since 10.0: a planet-menu landing on an open planet starts its next destination",
+  story_prime_before_travel = "is not used since 10.0: a destination's mission is always made active before the trip",
+  story_reload_stuck = "is not used since 10.0: a story waiting at its first step is loaded once more",
+  story_restart_stuck = "is not used since 10.0: a story waiting at its first step is loaded once more",
+}
 local SETTINGS = RANDO_SETTINGS or {}
 local KEY_SETTINGS = { key_status = true, key_campaign = true, key_test_travel = true, key_test_point = true,
                        key_hub = true, key_hub_return = true, key_story = true, key_shuffle = true }
@@ -181,8 +162,8 @@ for k, v in pairs(SETTINGS) do
   end
 end
 
--- 8.3: if rivet.key() does not use Windows key codes, keyboard key names cannot be bound: keys
--- that do not resolve go back to their old F keys
+-- if rivet.key() does not use Windows key codes, keyboard key names cannot be bound: the
+-- developer keys that do not resolve fall back to F keys
 R.LEGACY_KEYS = { key_status = "F9", key_campaign = "F12", key_test_travel = "F7", key_test_point = "F8",
                   key_hub = "F6", key_hub_return = "F5", key_story = "F4" }
 for setting, legacy in pairs(R.LEGACY_KEYS) do
@@ -242,6 +223,18 @@ R.restored = false
 R.boot = string.format("%x", math.floor(((rivet.time and rivet.time()) or 0) * 1000))
 local function changed() R.version = R.version + 1 end
 R.mark_changed = changed
+function R.set_state(s) S = s; R.state = s end
+
+-- planet shuffle: the hub's destinations and locked travel. Only hub seeds with 15_rando_hub.lua
+-- installed have it, and it is OFF until the player turns it on with the 0 key (state.planet_shuffle,
+-- saved by the companion and kept over a New Game). While it is off the story and travel are the
+-- game's own; items stay randomized.
+function R.hub_loaded() return SEED ~= nil and SEED.hub ~= nil and RANDO_HUB ~= nil end
+function R.planet_shuffle_on() return R.hub_loaded() and S ~= nil and S.planet_shuffle == true end
+-- the hub is running planet shuffle: switched on, and the hub has started in this run
+function R.hub_active()
+  return R.planet_shuffle_on() and RANDO_HUB.started ~= nil and RANDO_HUB.started() == true
+end
 
 local STATE_TABLES = { "collected", "paid", "banked", "access", "inventory", "story_missions", "planets_detected",
                        "bolts_seen", "armor_found", "armor_sets_done", "collectibles", "visited",
@@ -256,6 +249,7 @@ end
 local function fresh_state(run)
   return fill_defaults({ fingerprint = SEED.fingerprint, seed = SEED.seed, format = 8, started = false, run = run or 1 })
 end
+R.fresh_state = fresh_state
 
 R.HISTORY_KEEP = 400            -- 8.5: entries kept in memory (the save keeps the last 60; rivet.log has all)
 local function history(msg)
@@ -449,10 +443,10 @@ function R.on_story_mission(pid, mission)
   for _, lid in ipairs(planet_locations(pid)) do
     if DB.locations[lid].fallback == "with_planet" and not bound[lid] then R.collect(lid, "paid with the planet") end
   end
-  -- second story missions of earlier planets: paid once the story has moved on (not in a hub
-  -- seed: there the order is yours, and a destination pays its own when it is finished)
+  -- second story missions of earlier planets: paid once the story has moved on (not while the
+  -- hub runs planet shuffle: there the order is yours, and a destination pays its own when it ends)
   local idx = story_index(pid) or 0
-  if SEED.hub then idx = 0 end
+  if R.hub_active() then idx = 0 end
   for _, lid in ipairs(GEN.sorted_keys(SEED.locations)) do
     local loc = DB.locations[lid]
     if loc.fallback == "next_planet" and loc.planet and (story_index(loc.planet) or 99) < idx then
@@ -598,10 +592,9 @@ R.NEW_GAME_DEBOUNCE = 30
 local last_new_game = -1000
 function R.reset_for_new_game(why)
   local old = S
-  -- 10.0: the hub's learned mission starts describe the game, not the run: they are kept
-  -- v0.54: and planet shuffle on/off is your choice, not the run's
+  -- kept: what was learned about the game (not the run), and the player's planet shuffle choice
   local keep = { real_mode = old.real_mode, weapon_types = old.weapon_types, hub_learned = old.hub_learned,
-                 planet_shuffle_off = old.planet_shuffle_off }
+                 planet_shuffle = old.planet_shuffle }
   S = fresh_state((old.run or 1) + 1); R.state = S
   for k, v in pairs(keep) do S[k] = v end
   S.previous_run = { run = old.run or 1, collected = count(old.collected), bolts = 0, complete = old.campaign_complete or nil }
@@ -1101,15 +1094,36 @@ local function on_key(name, fn)
   end, name)
 end
 R.on_key = on_key
-R.bind_setting("key_status", "F9", function()
-  if not (SEED and S) then say("Randomizer: the seed is still being prepared"); return end
-  if R.ctrl_down() and RANDO_TRAVEL and SEED.travel_lock then RANDO_TRAVEL.hatch(); return end
-  say(R.status_text(), { type = "corner", duration = 6 })
-end)
+
+-- THE PLAYER'S KEY (key_shuffle, default 0). Every other key belongs to a dev(*).lua file.
+--   0           planet shuffle on / off (hub seeds with 15_rando_hub.lua; otherwise nothing happens)
+--   Ctrl+0 x2   send every item the randomizer knows you own again (lost ones come back)
+R.CONFIRM = 4                         -- seconds for the second Ctrl+0
+local restore_armed_at = -100
+function R.key_restore()
+  local G = RANDO_REAL
+  if not (G and G.restore_inventory and G.owned_items) then return false end
+  local n = #G.owned_items()
+  if n == 0 then say("Randomizer: no items of the randomizer to give back yet", { type = "corner", duration = 4 }); return false end
+  local t = (rivet.time and rivet.time()) or 0
+  if t - restore_armed_at > R.CONFIRM then
+    restore_armed_at = t
+    say(string.format("Randomizer: press %s again to send your %d items again (lost ones come back, owned ones stay as they are)",
+                      R.key("key_shuffle", true), n), { type = "center", duration = 5 })
+    return false
+  end
+  restore_armed_at = -100
+  local sent = G.restore_inventory("by hand (" .. R.key("key_shuffle", true) .. ")")
+  say(string.format("Randomizer: sending %d item(s) again - lost ones come back over the next seconds", sent), { type = "corner", duration = 6 })
+  return true
+end
+R.bind_key(R.config.key_shuffle, function()
+  if not (SEED and S) then say("Randomizer: the seed is still being prepared", { type = "corner", duration = 3 }); return end
+  if R.ctrl_down() then R.key_restore(); return end
+  if R.hub_loaded() then RANDO_HUB.key_shuffle() end
+end, "key_shuffle")
 log("RANDO-KEYS", R.keys_numeric and "keyboard keys on" or "rivet.key() does not use Windows key codes: only its own key names work",
-    string.format("status %s | hub %s | stay %s | story %s | planet shuffle %s | test travel %s %s%s", R.key("key_status"), R.key("key_hub"),
-                  R.key("key_hub_return"), R.key("key_story"), R.key("key_shuffle"), R.key("key_test_travel"), R.key("key_test_point"),
-                  R.config.legacy_f_keys and " | old F keys too" or ""))
+    "| planet shuffle " .. R.key("key_shuffle") .. ", give items back " .. R.key("key_shuffle", true) .. " twice")
 
 -- start: a pre-generated seed (tools/rando.py writes 00_rando_seed.lua), the settings' seed, or
 -- (seed = "random") one from the companion
@@ -1123,48 +1137,62 @@ elseif rando_seed_mode() == "fixed" then
   R.start_generation(tostring(SETTINGS.seed), "04_rando_settings.lua")
 end
 
--- 8.4 THE KIT CHECK: every script of this kit says its version (RANDO_FILES). On the first frame
--- (all scripts loaded) a missing script or one from another kit is reported in rivet.log and on
--- screen, so a scripts folder that mixes kits never plays silently half-updated.
+-- THE KIT CHECK: every script says its version (RANDO_FILES). On the first frame (all scripts
+-- loaded) a missing script or one from another version is reported in rivet.log and on screen, so
+-- a scripts folder that mixes versions never plays silently half-updated.
+--   R.KIT_FILES       required: the randomizer does not run correctly without them
+--   R.OPTIONAL_FILES  may be left out (15_rando_hub.lua: without it there is no planet shuffle)
+--   dev(*).lua        developer tools: logged when present, never required
 R.KIT_FILES = { "01_rando_data", "02_rando_generator", "03_rando_campaign", "04_rando_settings", "05_rando_bindings",
                 "06_rando_capabilities", "09_rando_real", "10_rando_runtime", "11_rando_campaign", "12_rando_shop",
-                "13_rando_armor", "14_rando_travel", "15_rando_hub", "16_rando_testtravel" }
--- scripts of older kits that must not be in the folder any more (10.0: none; 15_rando_hub.lua is
--- part of the kit again, and an 8.x copy shows up as "other versions")
-R.GONE_FILES = {}
+                "13_rando_armor", "14_rando_travel" }
+R.OPTIONAL_FILES = { "15_rando_hub" }
+-- scripts of older versions that must not be in the folder any more
+R.GONE_FILES = { ["16_rando_testtravel"] = "a developer tool, now dev(testtravel).lua" }
 function R.kit_check()
   local files = RANDO_FILES or {}
-  local missing, other = {}, {}
-  local gone = {}
+  local missing, other, gone, dev = {}, {}, {}, {}
   for f, why in pairs(R.GONE_FILES) do
     if files[f] ~= nil then gone[#gone + 1] = f .. ".lua (" .. why .. ")" end
   end
   table.sort(gone)
   if #gone > 0 then
-    log("RANDO-ERROR RANDO-KIT delete from the scripts folder: " .. table.concat(gone, ", ") ..
-        " - it was left by an older kit")
-    say("Randomizer: delete " .. table.concat(gone, ", ") .. " from the scripts folder (left by an older kit) - see rivet.log",
+    log("RANDO-ERROR RANDO-KIT delete from the scripts folder: " .. table.concat(gone, ", ") .. " - it was left by an older version")
+    say("Randomizer: delete " .. table.concat(gone, ", ") .. " from the scripts folder (left by an older version) - see rivet.log",
         { type = "center", duration = 10 })
+  end
+  local function check(f, v)
+    if v ~= nil and v ~= R.KIT_VERSION then other[#other + 1] = f .. " " .. tostring(v) end
   end
   for _, f in ipairs(R.KIT_FILES) do
     local v = files[f]
     if f == "04_rando_settings" then
       if v ~= R.KIT_VERSION then
-        log("RANDO-KIT 04_rando_settings.lua is from an older kit (" .. tostring(v or "before 8.4") ..
-            "): options it does not list use their defaults (docs\\PLAYER_GUIDE.md)")
+        log("RANDO-KIT 04_rando_settings.lua is from another version (" .. tostring(v or "before 8.4") ..
+            "): options it does not list use their defaults")
       end
     elseif v == nil then missing[#missing + 1] = f
-    elseif v ~= R.KIT_VERSION then other[#other + 1] = f .. " " .. tostring(v) end
+    else check(f, v) end
   end
+  local optional = {}
+  for _, f in ipairs(R.OPTIONAL_FILES) do
+    if files[f] == nil then optional[#optional + 1] = f .. " not installed" else check(f, files[f]) end
+  end
+  for f, v in pairs(files) do
+    if f:sub(1, 4) == "dev(" then dev[#dev + 1] = f; check(f, v) end
+  end
+  table.sort(dev)
+  if #dev > 0 then log("RANDO-KIT developer files loaded (not part of a release): " .. table.concat(dev, ", ")) end
   if #missing == 0 and #other == 0 then
-    log("RANDO-KIT all " .. #R.KIT_FILES .. " scripts are " .. R.KIT_VERSION)
+    log("RANDO-KIT all " .. #R.KIT_FILES .. " required scripts are " .. R.KIT_VERSION ..
+        (#optional > 0 and (" (" .. table.concat(optional, ", ") .. ")") or ""))
     return #gone == 0
   end
-  log("RANDO-ERROR RANDO-KIT the scripts folder does not hold one kit:" ..
+  log("RANDO-ERROR RANDO-KIT the scripts folder does not hold one version:" ..
       (#missing > 0 and (" missing " .. table.concat(missing, ", ")) or "") ..
       (#other > 0 and (" | other versions: " .. table.concat(other, ", ")) or "") ..
-      " - copy every file of the kit's scripts folder (INSTALL.txt)")
-  say("Randomizer: the scripts folder mixes kits or misses files - see rivet.log (RANDO-KIT)", { type = "center", duration = 10 })
+      " - copy every file of the download's scripts folder")
+  say("Randomizer: the scripts folder mixes versions or misses files - see rivet.log (RANDO-KIT)", { type = "center", duration = 10 })
   return false
 end
 
@@ -1247,8 +1275,7 @@ local function frame(dt)
   end
   if not announced and ready then
     announced = true
-    -- (v0.54: round 26 showed "Randomizer 10. - seed ...": the kit's first 3 characters)
-    say("Randomizer " .. R.RELEASE .. " (kit " .. R.KIT_VERSION .. ") - seed " .. SEED.seed .. " (" .. SEED.fingerprint .. ")",
+    say("Randomizer " .. R.RELEASE .. " - seed " .. SEED.seed .. " (" .. SEED.fingerprint .. ")",
         { type = "planet", sub = R.status_text(), duration = 6 })
   end
   if frames % 120 == 0 then
@@ -1263,71 +1290,6 @@ pcall(rivet.on_frame, function(dt)
     if frame_errors <= 5 then log("RANDO-ERROR frame:", tostring(err)) end
   end
 end)
-
--- ---------------------------------------------------------------------------------------
--- TEST MODE (extras/test_mode/07_rando_testmode.lua sets RANDO_TEST_MODE = true)
---   F10  finish a story mission on the current planet (or the first one not done)
---   F11  pick up a Gold Bolt on the current planet
---   Ctrl+F10 twice  reset this seed's randomizer progress
--- ---------------------------------------------------------------------------------------
-function R.test_planet()
-  local cur = S.current_planet
-  if cur then return cur end
-  for _, p in ipairs(DB.planets) do if not S.planets_detected[p.id] then return p.id end end
-  return DB.planets[#DB.planets].id
-end
-function R.test_story()
-  local pid = R.test_planet()
-  S.test_used = true
-  local n = 0
-  for _ in pairs(S.story_missions[pid] or {}) do n = n + 1 end
-  history("[TEST] story mission " .. (n + 1) .. " on " .. pid)
-  R.on_story_mission(pid, "TEST_" .. pid .. "_" .. (n + 1))
-  return pid
-end
-function R.test_gold_bolt()
-  local pid = R.test_planet()
-  S.test_used = true
-  local n = 1
-  while S.bolts_seen["TEST " .. pid .. " " .. n] do n = n + 1 end
-  local lid = R.pick_bolt_location(pid)
-  S.bolts_seen["TEST " .. pid .. " " .. n] = lid or "none"
-  history("[TEST] Gold Bolt on " .. pid)
-  if lid then R.collect(lid, "[TEST] Gold Bolt") else say("[TEST] no Gold Bolt left on " .. planet_name(pid)) end
-  return lid
-end
-local reset_armed_at = -100
-function R.test_reset()
-  local now = (rivet.time and rivet.time()) or 0
-  if now - reset_armed_at > 5 then
-    reset_armed_at = now
-    say("[TEST] Press Ctrl+F10 again within 5 seconds to RESET this seed's progress", { type = "center", duration = 5 })
-    return false
-  end
-  reset_armed_at = -100
-  local keep = { real = S.real, real_nodes = S.real_nodes, real_mode = S.real_mode, weapon_types = S.weapon_types,
-                 armor_baseline = S.armor_baseline, planet_shuffle_off = S.planet_shuffle_off }
-  S = fresh_state(); R.state = S
-  for k, v in pairs(keep) do S[k] = v end
-  S.test_used = true
-  begin()
-  history("[TEST] progress reset")
-  say("[TEST] Randomizer progress reset: " .. R.status_text(), { type = "center", duration = 5 })
-  return true
-end
-if RANDO_TEST_MODE then
-  on_key("F10", function()
-    local ctrl = false
-    pcall(function() ctrl = rivet.is_key_down(rivet.key("CONTROL")) end)
-    if ctrl then R.test_reset() else R.test_story() end
-  end)
-  on_key("F11", function()
-    local ctrl = false
-    pcall(function() ctrl = rivet.is_key_down(rivet.key("CONTROL")) end)
-    if not ctrl then R.test_gold_bolt() end        -- Ctrl+F11 is the campaign lab experiment
-  end)
-  log("RANDO-STATUS TEST MODE on: F10 story mission, F11 Gold Bolt, Ctrl+F10 twice resets")
-end
 
 log("Randomizer " .. R.KIT_VERSION .. " loaded (data " .. DB.version .. ", generator " .. GEN.VERSION .. ")")
 log(string.format("RANDO-STATUS events subscribed %d/%d%s", subscribed, total,

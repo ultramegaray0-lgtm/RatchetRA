@@ -1,120 +1,46 @@
--- Randomizer 10.0 hub, mission selection and planet shuffle (rivet_hook, Lua 5.4). v0.51
--- (10.0.2): the hub is NEFARIOUS CITY (10.0-v0.5: Zurkie's Battleplex). Loaded after
--- 10_rando_runtime.lua, 11_rando_campaign.lua and 14_rando_travel.lua. Active only for a seed made
--- with hub = true (the default).
+-- Randomizer: PLANET SHUFFLE, the Nefarious City hub (rivet_hook, Lua 5.4). OPTIONAL: without
+-- this file the randomizer plays the game's own story with randomized items. Loaded after
+-- 10_rando_runtime.lua, 11_rando_campaign.lua and 14_rando_travel.lua; active only for a seed made
+-- with hub = true (the default) and only while the player has planet shuffle ON (the 0 key,
+-- 10_rando_runtime.lua; OFF by default). Every step is logged as RANDO-HUB.
 --
--- NOTHING OF 10.0 OR v0.5x HAS RUN IN YOUR GAME YET. What each step rests on:
---
---  1. NEW GAME -> NEFARIOUS CITY. A new save always begins with the parade (the mission graph's
---     NewGameLoadInfo; a script cannot change it).
---     WHEN (v0.51, hub_trigger = "parade"): not at the wrench itself. Picking the wrench up
---     (OBJ_INTRO_PARADE_PICKUP_WRENCH done) starts OBJ_INTRO_GOING_DOWN at once, a scripted
---     sequence: in round 23 the game answered nothing sent to the hero during it ("no reaction from
---     the game", "the game is not answering right now") until GOING_DOWN finished and the parade
---     went on (OBJ_INTRO_PARADE_VELDIN_START). 10.0-v0.5 warped at the wrench, i.e. in the middle of
---     that sequence, with the prologue left active, and you report Ratchet could not walk after
---     the warp. So the warp now waits until GOING_DOWN is done and no parade sequence (an objective
---     named *GOING_DOWN*, *CINE* or *CUTSCENE*) has run for H.RELEASE_SETTLE frames (Ratchet walking
---     the Veldin float). If GOING_DOWN is never reported done, it goes H.RELEASE_TIMEOUT frames after
---     the wrench. hub_trigger = "wrench" keeps 10.0's timing.
---     HOW: like the game after the prologue (round 23: MIS_NEFCITY_01 becomes active, then the city
---     loads at CHK_NEFCITY_START), Ratchet is confirmed, MIS_NEFCITY_01 is made available and
---     started (round 17: these calls made it active), and the warp goes to CHK_NEFCITY_START, where
---     the game itself loads the city's story (rounds 16 and 23, by its CRC-32; the 8.x landing
---     CHK_NEFCITY_SHIP left it at "go to Nefarious City", rounds 17 and 22). The story is watched
---     (step 4d). Once you are there, the prologue is written complete (hub_prologue = "end"), as
---     kit 8.0 did after its warp in round 17 (the Battle Arena then played to its end), so no
---     parade state stays with Ratchet; its reward is paid. hub_prologue = "keep" leaves it active and
---     offers it as a destination, as 10.0 did.
---  2. THE START MENU. ] (next) and Ctrl+] (go) offer what is open:
---       Nefarious City - the hub's own story, MIS_NEFCITY_01 (Ratchet); already running after step 1
---       Battle Arena  - Zurkie's first visit, MIS_ZURK_01_VISIT_01 (Ratchet), loaded at
---                       CHK_ZURK_00_DEFAULT; round 17 played it to the end after the same steps
---       Prologue      - only with hub_prologue = "keep": back to the parade where you left it
---  3. PLANET SHUFFLE. Every other destination opens when you hold its planet's Coordinates (items
---     of the seed: Gold Bolts, missions, armor pods ... can hold them) and what it depends on is
---     done (03_rando_campaign.lua C.hub_available). ] lists what you can play, Ctrl+] goes.
---  4. LAUNCHING A DESTINATION (all steps logged as RANDO-HUB):
---       a. the visit's hero (rivet.hero_play_as; "already playing as that hero" is the
---          confirmation, 8.4);
---       b. its mission, asked from the game (rando_give.dll, the game's own State()):
---          active -> left as it is; available -> the game's start call; inactive -> "available"
---          written into its saved record (rando_give.dll v6), then the start call (round 17:
---          MIS_NEFCITY_01 and MIS_ZURK_01_VISIT_01 went active this way); complete -> finished;
---          start refused -> the replay call -> otherwise EXPLORE (Ctrl+[ twice finishes by hand);
---       c. the trip: a warp to the visit's own start checkpoint (start_cp, or one learned from an
---          earlier run), else the ship's flight / a warp to its landing. This mirrors what the game
---          does: its next mission becomes active first, then the planet loads at its start.
---       d. the story's first step ("go to <planet>") is watched; if it has not finished after
---          20 s, the start checkpoint (or the landing) is loaded once more.
---  5. FINISHING. A destination finishes when its last mission completes (MissionStateChangedEvent
---     3/4). Its story-mission and side locations pay, newly playable destinations are announced,
---     and after hub_return_delay seconds you are taken back to the hub. If the game's own story
---     takes you elsewhere first (Nefarious City -> Sargasso), you are brought back to the hub from
---     there: the game's linear order never takes over (hub_follow_story = true lets you carry on
---     when that destination is open anyway). The way home is CHK_NEFCITY_START while the city's
---     story is not finished (it resumes there), then the ship's pad CHK_NEFCITY_SHIP.
---  6. THE SHIP'S MENU. A landing on a planet without Coordinates sends you back to the hub; on an
---     open planet it starts that planet's next playable destination. Travel inside a destination
---     (a mission's own rifts) is never touched.
---  7. LEARNING. Every checkpoint the game triggers is named (14_rando_travel.lua: the engine's
---     CRC-32 of every name rivet.checkpoints() lists). The first one a destination's mission
---     triggers on its planet is kept as that destination's start for the next run.
---
--- v0.52 (10.0.3) THE CITY'S OPENING SCENE. Round 24 (v0.51's first run): the warp to
--- CHK_NEFCITY_START with MIS_NEFCITY_01 active landed, but the story never left
--- OBJ_NEFCITY_GO_TO_NEFCITY - not after the stuck-story reload, not after three presses of /. In
--- round 23 the game's own rift loaded the city at checkpoint hash 3046787773 first (the arrival
--- scene), then CHK_NEFCITY_START. So the hub start now copies the game's order more closely:
---   1. the prologue is written complete first (hub_prologue_timing = "before"; round 23: MIS_INTRO
---      turned 4 before the city's story started);
---   2. MIS_NEFCITY_01 is made available and started, and MIS_NEFCITY_01_TRAINSTATION made available
---      (round 23: the game opened it in the same frame);
---   3. the warp goes to the city's OPENING checkpoint (03_rando_campaign.lua C.OPENINGS), whose name
---      is found by its hash among the names your game lists. While that name is not found the hub
---      waits for the checkpoint catalog (H.OPENING_WAIT); if your game does not list it, the warp
---      goes to CHK_NEFCITY_START as before and rivet.log lists the city's checkpoints.
---   The story is given H.OPENING_STUCK_WAIT (the scene must not be cut short) before one reload
---   at the opening; / loads the opening again while the story waits at its first step.
--- None of this has run in your game yet.
---
--- v0.53 (10.0.4) THE BOSS FIGHT'S SHIFTS. Round 25 (v0.52's first run): the city's story ran, but
--- its boss fight (CHK_NEFCITY_HEAVY_FIGHT) shifts Ratchet to Savali or Sargasso, and with the
--- planetary travel byte on (set at the hub, set again on every return) the game played each shift
--- as a ship landing on ground that is not there: Ratchet fell and died, again after every reload.
--- The travel byte and the level bits are now left to the game while a destination runs (see
--- H.apply_world), taken back before the hub's own story is launched, and the hub stays quiet when
--- the story brings you back from a shift. They go on again once no destination is running.
---
--- v0.54 (10.0.5) ROUND 26. You report: [ (back to the hub) is useless; after trips with ] / Ctrl+]
--- the inventory was gone; some levels "don't work" when you warp to them. The log (a restored save
--- that continues on Viceron) shows the hub calling the save's own planet "the game's own story"
--- and sending you back to Nefarious City: h.finished_at, a frame number of an EARLIER session,
--- was saved with the hub's state, and frame numbers start at 0 again in every session, so the
--- 2-minute guard after a finished destination held for the whole first stretch of the next one.
---   * the guards after a finish and after the hub start are this session's only (H.session)
---   * [ no longer takes you back to the hub; it only cancels the automatic trip back after a
---     finished destination. Ctrl+[ twice still finishes a destination by hand
---   * 0 turns PLANET SHUFFLE off and on (H.set_shuffle): off, the hub and the levels lock leave
---     travel to the game (no trip undone, no warp, no story started, no send-back, the travel
---     byte and level bits this session turned on are taken back); items stay randomized. The
---     choice is part of the randomizer state the companion saves, and survives a New Game
---   * Ctrl+0 twice gives back everything the randomizer knows you own (09_rando_real.lua
---     G.restore_inventory); after the hub's own trips and after a load on another planet this
---     happens by itself when the load reports fewer than half of your weapons
---   * apply_world records the travel byte as its own only when it was off before, and the record
---     is dropped at every planet change (a load sets the save's own values): turning shuffle off
---     never turns off a travel the game itself has on
---
--- Keys (8.3 defaults; legacy_f_keys keeps F6/F5): ] next destination, Ctrl+] go, [ cancels an
--- automatic return, Ctrl+[ twice finish this destination by hand, / start the story of the planet
--- you are on, 0 planet shuffle off/on, Ctrl+0 twice give your items back.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["15_rando_hub"] = "10.0.5"   -- the kit check (10_rando_runtime.lua)
+--  1. NEW GAME -> NEFARIOUS CITY. A new save always begins with the parade. Once Ratchet has his
+--     wrench, the scripted GOING_DOWN sequence is done and no parade sequence (*GOING_DOWN*, *CINE*,
+--     *CUTSCENE*) has run for H.RELEASE_SETTLE frames, the hub starts (hub_trigger = "parade"; the
+--     game ignores the hero during those sequences). If GOING_DOWN is never reported done it goes
+--     H.RELEASE_TIMEOUT frames after the wrench. As the game does after the prologue: the prologue
+--     is written complete (hub_prologue = "end", hub_prologue_timing = "before"), Ratchet is
+--     confirmed, MIS_NEFCITY_01 is made available and started (MIS_NEFCITY_01_TRAINSTATION made
+--     available), and the warp goes to the city's opening checkpoint (03_rando_campaign.lua
+--     C.OPENINGS, found by its hash in the checkpoint catalog; CHK_NEFCITY_START if the catalog
+--     never lists it). Planet shuffle switched on after the parade waits for the next New Game.
+--  2. DESTINATIONS. Nefarious City's story and the Battle Arena are open from the start; every other
+--     destination opens when you hold its planet's Coordinates (items of the seed) and what it
+--     depends on is done (03_rando_campaign.lua C.hub_available).
+--  3. LAUNCHING A DESTINATION: its hero (rivet.hero_play_as); its mission, asked from the game
+--     (rando_give.dll: active -> as it is; available -> start; inactive -> made available, then
+--     start; start refused -> replay -> otherwise explore); then the trip to its start checkpoint
+--     (or a learned one, else the ship's flight / a warp to its landing). A story still at its
+--     "go to <planet>" step after a while is loaded once more.
+--  4. FINISHING. A destination finishes when its last mission completes. Its locations pay, newly
+--     open destinations are announced, and after hub_return_delay seconds you go back to the hub.
+--     If the game's own story takes you elsewhere first, you are brought back to the hub.
+--  5. THE SHIP'S MENU. A landing on a planet without Coordinates sends you back to the hub; on an
+--     open planet it starts that planet's next playable destination. A mission's own rifts are
+--     never touched; while a destination runs, the planetary travel byte and level bits are left
+--     to the game (a boss fight's shifts break otherwise) and taken back by the hub afterwards.
+--  6. LEARNING. The first checkpoint a destination's mission triggers on its planet is kept as
+--     that destination's start for the next run (14_rando_travel.lua names the checkpoints).
+--  7. INVENTORY. After the hub's own trips, if the load reports fewer than half of your weapons,
+--     every item the randomizer knows you own is sent again (restore_inventory).
+-- Frame guards (after a finish, after the hub start) count frames of this session only.
+-- The developer keys (] [ /) are bound by dev(keys).lua; this file only provides their actions.
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["15_rando_hub"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
 RANDO_HUB = RANDO_HUB or {}
 local H = RANDO_HUB
 local C = RANDO_CAMPAIGN
 local DB = RANDO_DATA
-H.VERSION = "10.0.5"
+H.VERSION = "10.0.6"
 
 local function log(...) pcall(rivet.log, "[rando]", "RANDO-HUB", ...) end
 local function S() return RANDO and RANDO.state end
@@ -129,6 +55,9 @@ local function say(text, opts) if RANDO and RANDO.say then RANDO.say(text, opts)
 local function pname(pid) return (RANDO and RANDO.planet_name and RANDO.planet_name(pid)) or tostring(pid) end
 local function changed() if RANDO and RANDO.mark_changed then RANDO.mark_changed() end end
 local function K(setting, ctrl) return (RANDO and RANDO.key and RANDO.key(setting, ctrl)) or setting end
+-- key hints for the developer keys (] [ /) appear only when dev(keys).lua is installed; players
+-- travel with the ship's planet menu. The text is "" without them.
+local function dev_hint(text) return RANDO_DEV_KEYS and text or "" end
 local function history(msg) if RANDO and RANDO.history then RANDO.history(msg) else log(msg) end end
 local function now() return (rivet.time and rivet.time()) or 0 end
 -- the hub's name in messages ("Nefarious City"; the seed's plan names the planet)
@@ -177,9 +106,10 @@ H.intro_restart = nil       -- frame until which a restarted prologue is not a N
 -- state
 -- ---------------------------------------------------------------------------------------------
 function H.plan() local sd = SEED(); return sd and sd.hub end
--- v0.54: planet shuffle switched off with the 0 key (saved in the randomizer state)
-function H.shuffle_off() local s = S(); return s ~= nil and s.planet_shuffle_off == true end
+-- planet shuffle on/off is the player's choice (the 0 key; OFF by default): 10_rando_runtime.lua
+function H.shuffle_off() return not (RANDO and RANDO.planet_shuffle_on and RANDO.planet_shuffle_on()) end
 function H.enabled() return H.plan() ~= nil and cfg("hub_runtime", true) ~= false and not H.shuffle_off() end
+function H.started() local h = H.state(); return h ~= nil and h.started == true end
 function H.state()
   local s = S()
   if not s then return nil end
@@ -285,7 +215,9 @@ function H.status_text()
   if not H.plan() then return nil end
   local h = H.state()
   if not h then return nil end
-  if not h.started then return "hub: not started (" .. K("key_hub", true) .. " goes to " .. HUBN() .. ")" end
+  if not h.started then
+    return H.shuffle_off() and "planet shuffle OFF (" .. K("key_shuffle") .. " turns it on)" or "hub: starts after the parade of a New Game"
+  end
   local total = #H.plan().destinations
   local cur = h.current and dest_by_id(h.current)
   local off = ""
@@ -363,7 +295,6 @@ function H.home_candidates()
   end
   return out
 end
-H.zurk_candidates = H.home_candidates     -- the 10.0 name
 function H.go_home(why)
   local p, h = H.plan(), H.state()
   if not (p and h) then return false end
@@ -493,7 +424,7 @@ end
 function H.start_failed(why)
   local h = H.state()
   log("could not reach the hub (" .. HUBN() .. "):", why)
-  say("Randomizer: could not reach " .. HUBN() .. " (" .. why .. ") - " .. K("key_hub") .. " / " .. K("key_hub", true) .. " work from anywhere",
+  say("Randomizer: could not reach " .. HUBN() .. " (" .. why .. ")" .. dev_hint(" - " .. K("key_hub") .. " / " .. K("key_hub", true) .. " work from anywhere"),
       { type = "center", duration = 9 })
   H.hub_started("unreached")
   h.phase = "hub_unreached"
@@ -519,8 +450,9 @@ function H.hub_started(how)
   log("start menu:", H.menu_text())
   local story = H.hub_story()
   local running = story and h.current == story.id and not h.done[story.id]
-  say(HUBN() .. " - the hub" .. (running and ": its story starts here. " or ". ") .. K("key_hub") .. " lists what is open, "
-      .. K("key_hub", true) .. " goes", { type = "planet", sub = H.menu_text(), duration = 12 })
+  say(HUBN() .. " - the hub" .. (running and ": its story starts here. " or ". ") ..
+      (RANDO_DEV_KEYS and (K("key_hub") .. " lists what is open, " .. K("key_hub", true) .. " goes") or "Travel with the ship's planet menu"),
+      { type = "planet", sub = H.menu_text(), duration = 12 })
   changed()
   H.after(H.SETTLE, function() H.apply_world("hub start") end, "hub start")
   H.after(H.SETTLE, function() H.prologue_check() end, "prologue")
@@ -552,7 +484,7 @@ function H.at_hub(how)
     for _, id in ipairs(fresh) do local d = dest_by_id(id); names[#names + 1] = d and (pname(d.planet) .. " (" .. (d.title or id) .. ")") or id end
     say("Now open: " .. table.concat(names, ", "), { type = "planet", sub = H.menu_text(), duration = 10 })
   else
-    say(string.format("%s: %d destination(s) open - %s next, %s go", HUBN(), #H.available(), K("key_hub"), K("key_hub", true)),
+    say(string.format("%s: %d destination(s) open%s", HUBN(), #H.available(), dev_hint(" - " .. K("key_hub") .. " next, " .. K("key_hub", true) .. " go")),
         { type = "corner", duration = 6 })
   end
   changed()
@@ -698,8 +630,8 @@ local function set_attempt(d, what, detail)
 end
 function H.explore(d, why)
   set_attempt(d, "explore", why)
-  say(string.format("%s: the story could not be started (%s) - explore; %s twice finishes it by hand", pname(d.planet), tostring(why),
-                    K("key_hub_return", true)), { type = "center", duration = 9 })
+  say(string.format("%s: the story could not be started (%s) - explore%s", pname(d.planet), tostring(why),
+                    dev_hint("; " .. K("key_hub_return", true) .. " twice finishes it by hand")), { type = "center", duration = 9 })
 end
 
 -- the visit's mission to act on: the first one the game knows that is not complete
@@ -964,8 +896,9 @@ function H.watch_story(d, name, cp)
     if S().current_planet ~= d.planet then log("story", name, "waits for", d.planet, "- you are on", tostring(S().current_planet)); return end
     if H.session.reloaded[d.id] then
       log("story", name, "still at", last.o, "after a reload")
-      say(string.format("%s: the story still waits at its first step - press %s to load it again, or %s twice to finish by hand",
-                        pname(d.planet), K("key_story"), K("key_hub_return", true)), { type = "center", duration = 9 })
+      say(string.format("%s: the story still waits at its first step%s", pname(d.planet),
+                        dev_hint(" - press " .. K("key_story") .. " to load it again, or " .. K("key_hub_return", true) .. " twice to finish by hand")),
+          { type = "center", duration = 9 })
       return
     end
     H.session.reloaded[d.id] = H.frame
@@ -1127,9 +1060,9 @@ function H.finish(d, how, quiet)
   if d.kind ~= "hub" and cfg("hub_auto_return", true) then
     local delay = cfg("hub_return_delay", 12)
     H.return_at = H.frame + math.max(1, delay) * 60
-    say(msg, { type = "planet", sub = string.format("Back to %s in %d s (%s to stay)", HUBN(), delay, K("key_hub_return")), duration = 8 })
+    say(msg, { type = "planet", sub = string.format("Back to %s in %d s%s", HUBN(), delay, dev_hint(" (" .. K("key_hub_return") .. " to stay)")), duration = 8 })
   else
-    say(msg, { type = "planet", sub = K("key_hub") .. " to choose the next destination", duration = 8 })
+    say(msg, { type = "planet", sub = RANDO_DEV_KEYS and (K("key_hub") .. " to choose the next destination") or "Choose the next destination with the ship's planet menu", duration = 8 })
     if d.kind == "hub" then
       h.unannounced = nil
       -- v0.53: the world was left to the game while the story ran; the hub's travel goes on now
@@ -1305,7 +1238,7 @@ function H.on_arrival(pid, from)
         H.after(H.SETTLE, function() H.launch_dest(d, "planet menu") end, "menu launch " .. d.id)
       else
         h.phase, h.current = "away", nil
-        say(pname(pid) .. ": nothing to play here yet - explore, or choose a destination with " .. K("key_hub") .. " / " .. K("key_hub", true),
+        say(pname(pid) .. ": nothing to play here yet - explore" .. dev_hint(", or choose a destination with " .. K("key_hub") .. " / " .. K("key_hub", true)),
             { type = "corner", duration = 6 })
       end
     elseif test_travel_on() then
@@ -1373,14 +1306,8 @@ function H.on_menu_accept(f)
 end
 
 -- ---------------------------------------------------------------------------------------------
--- keys
+-- key actions (bound by dev(keys).lua; the 0 key by 10_rando_runtime.lua)
 -- ---------------------------------------------------------------------------------------------
-local function ctrl_down()
-  if RANDO and RANDO.ctrl_down then return RANDO.ctrl_down() end
-  local ctrl = false
-  pcall(function() ctrl = rivet.is_key_down(rivet.key("CONTROL")) end)
-  return ctrl
-end
 local function describe_entry(e)
   if e.revisit then return "revisit " .. pname(e.revisit) .. " (no story; Gold Bolts, armor pods ...)" end
   local d = e.dest
@@ -1421,7 +1348,7 @@ function H.key_go()
   H.launch_dest(e.dest, K("key_hub", true))
 end
 
-local confirm = { finish = -100, restore = -100 }
+local confirm = { finish = -100 }
 
 -- the story key: start the story of the planet you are on (its next playable destination)
 function H.key_story()
@@ -1468,7 +1395,7 @@ function H.key_finish()
 end
 
 -- ---------------------------------------------------------------------------------------------
--- v0.54 planet shuffle off / on (the 0 key), and giving your items back (Ctrl+0 twice)
+-- planet shuffle off / on (the 0 key)
 -- ---------------------------------------------------------------------------------------------
 -- everything the hub has scheduled or is waiting for is dropped (nothing fires later)
 function H.quiet(why)
@@ -1483,8 +1410,8 @@ function H.set_shuffle(on, why)
   if not s then return false end
   local was_on = not H.shuffle_off()
   if on == was_on then return false end
-  s.planet_shuffle_off = (not on) or nil
-  H.session.shuffle_set = not on            -- this session's choice outlives a later restore
+  s.planet_shuffle = on or nil
+  H.session.shuffle_choice = on             -- this session's choice outlives a later restore
   changed()
   history(string.format("[PLANET SHUFFLE %s] (%s)", on and "ON" or "OFF", tostring(why)))
   if not on then
@@ -1498,34 +1425,30 @@ function H.set_shuffle(on, why)
   end
   log("planet shuffle ON (" .. tostring(why) .. ")")
   local p, h = H.plan(), H.state()
-  if p and h and h.started and s.current_planet == p.planet and not H.running() then
+  if h and not h.started then
+    -- the hub starts where a New Game's parade hands Ratchet back. Switched on during the parade it
+    -- starts there; switched on later in a run, it waits for the next New Game (a run already past
+    -- the parade is never moved to the hub's start)
+    local ss = H.session
+    if ss.new_game and not trigger_met() then
+      say("Randomizer: planet shuffle ON", { type = "center", sub = HUBN() .. " is your hub once the parade is over", duration = 6 })
+    else
+      ss.new_game = nil
+      log("planet shuffle ON outside the parade: the hub starts with the next New Game")
+      say("Randomizer: planet shuffle ON", { type = "center", sub = "it starts with your next New Game", duration = 8 })
+    end
+    return true
+  end
+  if p and h and s.current_planet == p.planet and not H.running() then
     H.after(H.SETTLE, function() H.apply_world("planet shuffle on") end, "planet shuffle on")
   end
   say("Randomizer: planet shuffle ON", { type = "center",
-      sub = K("key_hub") .. " lists the destinations, " .. K("key_hub", true) .. " goes", duration = 6 })
+      sub = RANDO_DEV_KEYS and (K("key_hub") .. " lists the destinations, " .. K("key_hub", true) .. " goes")
+            or "travel with the ship's planet menu", duration = 6 })
   return true
 end
 function H.key_shuffle()
   H.set_shuffle(H.shuffle_off(), K("key_shuffle"))
-end
-
-function H.key_restore()
-  local G = RANDO_REAL
-  if not (G and G.restore_inventory and G.owned_items) then
-    return say("Randomizer: 09_rando_real.lua is missing", { type = "corner", duration = 4 })
-  end
-  local n = #G.owned_items()
-  if n == 0 then return say("Randomizer: no items of the randomizer to give back yet", { type = "corner", duration = 4 }) end
-  local t = now()
-  if t - confirm.restore > H.CONFIRM then
-    confirm.restore = t
-    say(string.format("Randomizer: press %s again to send your %d items again (lost ones come back, owned ones stay as they are)",
-                      K("key_shuffle", true), n), { type = "center", duration = 5 })
-    return
-  end
-  confirm.restore = -100
-  local sent = G.restore_inventory("by hand (" .. K("key_shuffle", true) .. ")")
-  say(string.format("Randomizer: sending %d item(s) again - lost ones come back over the next seconds", sent), { type = "corner", duration = 6 })
 end
 
 -- after the companion's restore (10_rando_runtime.lua): a choice made this session wins over the
@@ -1533,8 +1456,8 @@ end
 function H.after_restore()
   local s = S()
   if not s then return end
-  if H.session.shuffle_set ~= nil then s.planet_shuffle_off = H.session.shuffle_set or nil end
-  if s.hub then s.hub.finished_at = nil end   -- v0.54: an earlier session's frame (never used again)
+  if H.session.shuffle_choice ~= nil then s.planet_shuffle = H.session.shuffle_choice or nil end
+  if s.hub then s.hub.finished_at = nil end   -- a frame number of an earlier session (never used again)
   if H.shuffle_off() then
     H.quiet("planet shuffle is off (restored)")
     log("planet shuffle is OFF in this save -", K("key_shuffle"), "turns it on")
@@ -1604,7 +1527,7 @@ function H.tick(frame, ready)
     if S().current_planet == H.plan().planet then
       log("destination finished - already at the hub, no trip back")
     elseif not H.go_home("destination finished") then
-      say("Randomizer: the warp to " .. HUBN() .. " failed - take the ship, or choose a destination with " .. K("key_hub", true),
+      say("Randomizer: the warp to " .. HUBN() .. " failed - take the ship" .. dev_hint(", or choose a destination with " .. K("key_hub", true)),
           { type = "center", duration = 6 })
     end
   end
@@ -1636,30 +1559,4 @@ pcall(rivet.on_event, "PlanetMenuAcceptEvent", function(ev)
   if not ok then log("RANDO-ERROR menu", tostring(err)) end
 end)
 
-local function bind(setting, legacy, fn)
-  if not (RANDO and RANDO.bind_setting) then return end
-  RANDO.bind_setting(setting, legacy, function()
-    if not (H.plan() and S()) then return end
-    if H.shuffle_off() then
-      return say("Randomizer: planet shuffle is off - " .. K("key_shuffle") .. " turns it on", { type = "corner", duration = 4 })
-    end
-    if not H.enabled() then return say("Randomizer: hub_runtime is off", { type = "corner", duration = 3 }) end
-    local ready = false
-    pcall(function() ready = rivet.scene_ready() and rivet.hero() ~= nil end)
-    if not ready then return say("Randomizer: wait until the game has loaded", { type = "corner", duration = 3 }) end
-    fn(ctrl_down())
-  end)
-end
-bind("key_hub", "F6", function(ctrl) if ctrl then H.key_go() else H.key_select() end end)
-bind("key_hub_return", "F5", function(ctrl) if ctrl then H.key_finish() else H.key_return() end end)
-bind("key_story", nil, function() H.key_story() end)
--- v0.54: 0 planet shuffle off / on, Ctrl+0 twice give your items back (both work with it off)
-if RANDO and RANDO.bind_setting then
-  RANDO.bind_setting("key_shuffle", nil, function()
-    if not S() then return say("Randomizer: the seed is still being prepared", { type = "corner", duration = 3 }) end
-    if ctrl_down() then return H.key_restore() end
-    if not H.plan() then return say("Randomizer: planet shuffle is part of hub seeds (hub = true)", { type = "corner", duration = 4 }) end
-    H.key_shuffle()
-  end)
-end
-log("loaded (" .. H.VERSION .. ")" .. (H.shuffle_off() and " - planet shuffle OFF" or ""))
+log("loaded (" .. H.VERSION .. ")")

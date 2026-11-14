@@ -9,7 +9,7 @@
 --   missions    = { ["<MissionName from MissionCompleteEvent>"] = "planet:savali" },
 --   bolts       = { ["<BoltName from GainGoldBoltEvent>"]       = "goldbolt:10" },
 --   checkpoints = { ["<DestinationCheckpointName>"]             = "savali" },
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["05_rando_bindings"] = "10.0.5"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["05_rando_bindings"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
 RANDO_BINDINGS = {
   -- PlanetChangedEvent.NewPlanetName -> planet id, for names observed after the model was frozen
   -- (adding them to the model would change every seed's fingerprint)

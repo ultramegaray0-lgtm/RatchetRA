@@ -53,7 +53,7 @@
 -- rivet.read returns is now turned into bytes by one gsub with a lookup table and string.byte (no
 -- Lua loop per byte), reads are smaller, a slice also yields after H.SLICE_SECONDS, and a budget
 -- error makes the next try use half the read size instead of counting against the vendor.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["12_rando_shop"] = "10.0.5"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["12_rando_shop"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_SHOP = RANDO_SHOP or {}
 local H = RANDO_SHOP

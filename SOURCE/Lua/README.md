@@ -1,11 +1,21 @@
-# Lua Source
+# Lua scripts: v0.55
 
-Upload the Lua source files required to understand and build/run the randomizer here.
+These 13 files go into `<game folder>\scripts`. rivet_hook loads them in name order.
 
-Before uploading:
-- Remove development-only scripts that are not part of the public source release, or clearly label them.
-- Review comments, strings, and debug output for usernames, local machine paths, tokens, and other private information.
-- Identify which files are required at runtime.
-- Preserve applicable third-party copyright and license notices.
+| File | Role |
+|---|---|
+| `01_rando_data.lua` | game database: items, locations, planets |
+| `02_rando_generator.lua` | seed generator, progression solver, spoiler log |
+| `03_rando_campaign.lua` | mission registry and planet-shuffle destinations |
+| `04_rando_settings.lua` | **the player's settings** |
+| `05_rando_bindings.lua` | game event names |
+| `06_rando_capabilities.lua` | game features verified in testing |
+| `09_rando_real.lua` | delivers rewards into the real inventory (with `rando_give.dll`) |
+| `10_rando_runtime.lua` | state, rewards, saving, the 0 key, the version check |
+| `11_rando_campaign.lua` | mission state reads and calls |
+| `12_rando_shop.lua` | Ms. Zurkon's shop |
+| `13_rando_armor.lua` | armor sources as reward locations |
+| `14_rando_travel.lua` | locked travel and checkpoint names |
+| `15_rando_hub.lua` | **optional**: planet shuffle (the Nefarious City hub) |
 
-Do not upload game assets or proprietary game files.
+Files 07, 08 and 16 do not exist in a release: those numbers belonged to developer tools.

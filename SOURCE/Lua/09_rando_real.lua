@@ -46,7 +46,7 @@
 --     from their own queue (G.give_currency); nothing is retried once the game took the message
 --   * G.lookup_config asks the helper where a loaded config lives (kind 7, read only), for the
 --     shop (12_rando_shop.lua)
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["09_rando_real"] = "10.0.5"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["09_rando_real"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_REAL = RANDO_REAL or {}
 local G = RANDO_REAL
@@ -81,8 +81,11 @@ G.seen = G.seen or {}                    -- gadget type ids the game has reporte
 local DATA = RANDO_DATA or {}
 local ITEMS = DATA.real_items or {}
 local NODES = DATA.real_nodes or { layout_ids = {}, preferred_nodes = {} }
-local VT = RANDO_VTABLES or {}
-local EXE = RANDO_EXE or { add_to_inventory_vtable = 0x2FA4DE0, add_to_inventory_handler = 0x86CB90, handler_slot = 10 }
+-- the exe's script-action vtables come from the developer file dev(vtables).lua when it is
+-- installed (it loads after this file, so they are looked up when used)
+local function VT() return RANDO_VTABLES or {} end
+local EXE_DEFAULT = { add_to_inventory_vtable = 0x2FA4DE0, add_to_inventory_handler = 0x86CB90, handler_slot = 10 }
+local function EXE() return RANDO_EXE or EXE_DEFAULT end
 local TARGET_PLUG = 0x7817619b
 
 local function log(...) pcall(rivet.log, "[rando]", "RANDO-REAL", ...) end
@@ -356,7 +359,7 @@ end
 
 -- checks one node; returns a donor record, or nil and the reason (and its output count)
 function G.check_donor(node)
-  local rva = VT[node.class]
+  local rva = VT()[node.class]
   if not rva then return nil, "class not in the vtable table" end
   local okc, c = pcall(rivet.component, node.actor, node.class)
   if not (okc and c and c.handle == node.component) then return nil, "instance not reachable" end
@@ -372,8 +375,8 @@ function G.check_donor(node)
   if not vt then return nil, "cannot read the vtable", outs end
   local base = vt - rva
   if base % 0x10000 ~= 0 then return nil, string.format("vtable %X does not match the RTTI table", vt), outs end
-  local aia_vt = base + EXE.add_to_inventory_vtable
-  if read_u64(aia_vt + 8 * EXE.handler_slot) ~= base + EXE.add_to_inventory_handler then
+  local aia_vt = base + EXE().add_to_inventory_vtable
+  if read_u64(aia_vt + 8 * EXE().handler_slot) ~= base + EXE().add_to_inventory_handler then
     return nil, "AddToInventoryAction vtable check failed", outs
   end
   if outs > 0 then return nil, outs .. " output(s) wired", outs end
@@ -833,7 +836,6 @@ function G.on_planet_change(new_name)
   end
 end
 
-function G.forget_node() G.node = nil; G.donor_job = nil; G.next_scan = G.frame + 120 end
 
 -- Is the game running normally right now? rivet.time_scale() raises while the pump is on the
 -- render thread (loading screens) and reports the applied speed otherwise; a paused game or a
@@ -1206,7 +1208,6 @@ end
 function G.lookup_config(id_hex, cb)
   G.aux_queue[#G.aux_queue + 1] = { kind = 7, id = id_hex, cb = cb }
 end
-function G.aux_idle() return not (G.busy or G.mission_busy or G.aux_busy) end
 
 local function aux_start()
   local n = G.native

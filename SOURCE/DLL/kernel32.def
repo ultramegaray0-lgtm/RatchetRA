@@ -1,0 +1,19 @@
+LIBRARY kernel32.dll
+EXPORTS
+VirtualAlloc
+VirtualProtect
+FlushInstructionCache
+GetCurrentProcess
+GetCurrentProcessId
+GetCurrentThreadId
+GetModuleHandleA
+GetModuleHandleExA
+CreateToolhelp32Snapshot
+Thread32First
+Thread32Next
+OpenThread
+SuspendThread
+ResumeThread
+GetThreadContext
+SetThreadContext
+CloseHandle
