@@ -5,6 +5,19 @@
 -- deterministic: same seed text + same settings + same data version = same placements,
 -- on any machine. Nothing here depends on table iteration order: every key list is sorted.
 --
+-- 10.1 (data 5.1.0):
+--   * SPYBOTS AND LORBS HOLD ITEMS (collectibles = true, the default): the game's 10 Spybots and
+--     12 Lorbs (all on Savali) are reward locations. A location is "the n-th one picked up". Their
+--     pickup event is not bound yet (05_rando_bindings.lua collectible_events), so they are never in
+--     logic: they take part in the ordinary item fill (weapons, gadgets nothing needs, armor) and in
+--     currency, never Coordinates or a gadget a location needs, so a seed never depends on them.
+--     Until the event is bound in the game, what they hold is not handed over.
+--   * BURST PISTOL, SHATTERBOMB AND RYNO 8 ARE ITEMS (acquisition "reward"): always a reward at a
+--     location, never sold in one of the 15 normal slots and never a random start weapon (start_items
+--     may still name them). The vendor slots Shatterbomb and RYNO 8 have in the normal game are
+--     closed by 12_rando_shop.lua (the seed gives them at a location), so the reward is the only
+--     route. The game still hands out a Burst Pistol in the prologue: it is kept off Gold Bolts and
+--     early weapons where another place exists (G.DUD_REWARDS).
 -- 10.0 (the hub and planet shuffle; the user's 8.5.2 defaults stay the baseline):
 --   * HUB (hub = true, the default): a new game goes to the hub after the parade's wrench
 --     (v0.51: Nefarious City, whose story starts there; 10.0-v0.5: Zurkie's Battleplex). The
@@ -62,8 +75,7 @@
 --   * THE WEAPON REGISTRY (DB.items[...].acquisition, data/weapon_registry.json): every weapon
 --     has exactly one route. The pool weapons are split by the seed over the vendor's 15 normal
 --     slots (each keeps the point in the story it unlocks), the start and reward locations.
---     Shatterbomb and RYNO 8 stay in their own slots, the Burst Pistol is the starting weapon,
---     cut weapons are never placed.
+--     cut weapons are never placed. (10.1: Shatterbomb, RYNO 8 and the Burst Pistol are rewards.)
 --   * ARMOR: the 27 armor pieces you can find are items, and every armor source (a pocket
 --     dimension, a Zurkie's challenge, the Lorb monk) is a location.
 --
@@ -76,10 +88,10 @@
 --   * Abilities the story gives (Speetle, Trudi, ...) cannot be granted: locations needing
 --     them, and locations whose trigger is not proven (armor finds, collectibles), only ever
 --     hold non-progression rewards.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["02_rando_generator"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["02_rando_generator"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
 RANDO_GEN = {}
 local G = RANDO_GEN
-G.VERSION = "10.0.2"
+G.VERSION = "10.11.0"
 local DB = RANDO_DATA
 
 -- ------------------------------------------------------------------------------------------
@@ -160,6 +172,8 @@ G.DEFAULTS = {
   -- where rewards are (the 25 Gold Bolts always are)
   story_milestones = true,        -- second story mission of each planet
   side_locations = true,          -- Zurkie's cups, Trudi, Blizar chef, Ardolis
+  collectibles = true,            -- 10.1: the 10 Spybots and 12 Lorbs give rewards (never in logic: their
+                                  -- pickup event is not bound yet, so nothing the seed needs goes there)
   -- start (Hoverboots and Map-O-Matic are always added)
   start_weapons = 2,
   start_gadgets = 1,              -- extra randomizer gadgets at the start
@@ -184,13 +198,26 @@ G.DEFAULTS = {
   shop_weapons = 8,               -- different weapons Ms. Zurkon sells (0-15); her other slots are closed
                                   -- and those weapons become rewards
   early_weapons = 2,              -- weapons placed at locations open from the start (0-6)
+  -- dev 10.11
+  coords_first_visit = true,      -- hub: progression never on a revisit or the finale, and a planet's
+                                  -- Coordinates only where its first visit can be played once found
+  -- dev 10.15
+  omega_weapons = false,          -- the 20 vanilla weapons' Omega versions (Challenge Mode / New Game+) join
+                                  -- the item pool as rewards of their own (omega:<weapon>); off: seeds as 10.13
 }
+-- dev 10.15: settings added after 10.13 that are left out of the fingerprint while they have their
+-- default value, so every seed made without them is the same seed as before (same placements)
+G.FINGERPRINT_SINCE_10_15 = { omega_weapons = false }
 -- items every seed starts with, whatever the settings say
 G.ALWAYS_START = { "hoverboots", "map_o_matic" }
--- weapons the game itself hands out in the prologue whatever happens (Burst Pistol and
--- Shatterbomb: round 14's rivet.log shows the Burst Pistol already owned on a fresh save). A
--- Gold Bolt holding one would give nothing, so they are not rewards.
-G.GAME_GIVEN = { "weapon:burst_pistol" }
+-- weapons the game itself hands out whatever happens and that are never rewards. 10.1: none (the
+-- Burst Pistol, owned on a fresh save since round 14, is a reward now, as asked for).
+G.GAME_GIVEN = {}
+-- 10.1: rewards the game also hands out on its own (round 14: a fresh save owns the Burst Pistol).
+-- Finding one adds nothing new, so the fill keeps them off Gold Bolts and early weapons when it can.
+G.DUD_REWARDS = { ["weapon:burst_pistol"] = "the game hands one out in the prologue" }
+-- 10.1: the collectibles that are reward locations (CraiggerBears are not: their count is unknown)
+G.COLLECTIBLE_LOCATIONS = { spybot = true, lorb = true }
 -- settings that no longer exist, and why
 G.RETIRED = {
   shop_slots = "3.x", shop_progression_max = "3.x", luxury_slots = "3.x", economy = "3.x",
@@ -393,7 +420,10 @@ end
 
 function G.canonical(s)
   local parts = {}
-  for _, k in ipairs(sorted_keys(G.DEFAULTS)) do parts[#parts + 1] = k .. "=" .. tostring(s[k]) end
+  for _, k in ipairs(sorted_keys(G.DEFAULTS)) do
+    local d = G.FINGERPRINT_SINCE_10_15[k]
+    if d == nil or s[k] ~= d then parts[#parts + 1] = k .. "=" .. tostring(s[k]) end
+  end
   return table.concat(parts, ";")
 end
 -- settings that differ from the defaults, as a short shareable text
@@ -427,6 +457,15 @@ end
 function G.fingerprint(seed_text, s)
   return G.hex(G.fnv1a(table.concat({ "RA10", G.VERSION, DB.version, seed_text, G.canonical(s) }, "\n"))):sub(1, 12)
 end
+-- dev 10.15: the random streams of the placements use the fingerprint WITHOUT the 10.15 settings, so
+-- turning omega_weapons on keeps the seed: the same items in the same places, plus the Omega versions on
+-- locations that gave Bolts or Raritanium. The seed's own fingerprint (saves, share code) still differs.
+function G.placement_fingerprint(seed_text, s)
+  local base = {}
+  for k, v in pairs(s) do base[k] = v end
+  for k, d in pairs(G.FINGERPRINT_SINCE_10_15) do base[k] = d end
+  return G.fingerprint(seed_text, base)
+end
 
 -- ------------------------------------------------------------------------------------------
 -- pools
@@ -456,6 +495,7 @@ function G.location_pool(s)
       or (loc.kind == "story" and s.story_milestones)
       or (loc.kind == "side" and s.side_locations)
       or (loc.kind == "armor_source" and s.armor)
+      or (loc.kind == "collectible" and s.collectibles and G.COLLECTIBLE_LOCATIONS[loc.collectible] == true)
     if use then
       local reqs, in_logic = {}, loc.progression
       for _, r in ipairs(loc.requires or {}) do
@@ -611,14 +651,47 @@ function G.currency_amounts(s, lids, rng)
 end
 
 -- 6.0 the weapon pool: weapons that may be sold in a vendor slot, start, or be a reward
+-- (10.1: "reward" weapons are rewards only)
 function G.in_weapon_pool(key, s)
   local it = DB.items[key]
   if not (it and it.category == "weapon") then return false end
-  return it.acquisition == "pool" or (it.acquisition == "arsenal_restored" and s.include_arsenal_restored == true)
+  return it.acquisition == "pool" or it.acquisition == "reward"
+      or (it.acquisition == "arsenal_restored" and s.include_arsenal_restored == true)
+end
+-- 10.1: a weapon that is always a reward at a location (Burst Pistol, Shatterbomb, RYNO 8)
+function G.reward_only(key)
+  local it = DB.items[key]
+  return it ~= nil and it.acquisition == "reward"
 end
 -- 10.0: a weapon Ms. Zurkon may sell in one of her 15 normal slots. ARSENAL_RESTORED's weapons are
 -- never shop weapons (that mod's vendor sells them in slots of its own, which the runtime closes
 -- when the seed gives them elsewhere), so they are always rewards.
+-- dev 10.15 OMEGA VERSIONS (data: omega:<weapon>, category "omega"). In your game an Omega weapon is the
+-- weapon you own with its WeaponItemPrius.Omega flag set (no item id of its own; tools/build_data.py
+-- has the evidence). With omega_weapons each of the 20 Omega versions is one reward of its own: placed
+-- once, at a location (or at the start through start_items), never in the shop, never as a random start
+-- weapon, never needed by the logic (useful, not progression), and never on a Gold Bolt (they are all
+-- filled first, as before). They are placed AFTER every other item, from their own random stream, on
+-- locations that would otherwise give currency: the other placements of the seed do not move.
+function G.omega_keys(s)
+  local out = {}
+  if not (s and s.omega_weapons) then return out end
+  local ex = excluded_set(s)
+  for _, key in ipairs(sorted_keys(DB.items)) do
+    if DB.items[key].category == "omega" and not ex[key] then out[#out + 1] = key end
+  end
+  return out
+end
+function G.omega_weapon(key)
+  local it = DB.items[key]
+  return it and it.category == "omega" and it.weapon or nil
+end
+-- the Omega item of a weapon key ("weapon:burst_pistol" -> "omega:burst_pistol"), nil if none
+function G.omega_of(weapon_key)
+  local k = type(weapon_key) == "string" and weapon_key:gsub("^weapon:", "omega:", 1)
+  return k and DB.items[k] and DB.items[k].category == "omega" and k or nil
+end
+
 function G.shop_eligible(key, s)
   local it = DB.items[key]
   return G.in_weapon_pool(key, s) and it.acquisition == "pool"
@@ -778,8 +851,59 @@ local function gating_gadgets(s)
   return g
 end
 
+-- dev 10.11 COORDINATES OPEN A FIRST VISIT (hub seeds, coords_first_visit = true; the rules are
+-- 03_rando_campaign.lua C.progression_spot_ok / C.coords_spot_ok): may progression item `key` go to
+-- location lid? Returns ok, why.
+function G.spot_ok(s, key, lid)
+  local camp = s._campaign
+  if not (s.hub and s.coords_first_visit and camp and camp.hub and RANDO_CAMPAIGN.coords_spot_ok) then return true end
+  local seg = camp.loc_seg[lid]
+  local it = DB.items[key]
+  if it and it.category == "coordinates" then
+    return RANDO_CAMPAIGN.coords_spot_ok(it.planet, seg, DB.locations[lid].kind)
+  end
+  return RANDO_CAMPAIGN.progression_spot_ok(seg)
+end
+-- the spots of `spots` progression item `key` may take. When the rules leave none, rule 1 alone,
+-- then every spot (said in the seed's notes, so the audit and the spoiler know).
+function G.filter_spots(s, key, spots, notes)
+  if not (s.hub and s.coords_first_visit) then return spots end
+  local strict, loose = {}, {}
+  local camp = s._campaign
+  for _, lid in ipairs(spots) do
+    if G.spot_ok(s, key, lid) then strict[#strict + 1] = lid end
+    if RANDO_CAMPAIGN.progression_spot_ok(camp and camp.loc_seg[lid]) then loose[#loose + 1] = lid end
+  end
+  if #strict > 0 then return strict end
+  if #spots > 0 and notes then
+    notes[#notes + 1] = "coords_first_visit: no location fits " .. key .. " - " ..
+      ((#loose > 0) and "placed on a first visit anyway" or "placed where it fits") .. " (exception)"
+    s._coords_exceptions = s._coords_exceptions or {}
+    s._coords_exceptions[key] = true
+  end
+  if #loose > 0 then return loose end
+  return spots
+end
+
+-- dev 10.11: Coordinates whose first visit waits for other visits (Viceron) have the fewest places
+-- they may go: they move to the end of the list, which the fill takes from first
+function G.constrained_last(s, prog)
+  if not (s.hub and s.coords_first_visit) then return prog end
+  local keep, tight = {}, {}
+  for _, key in ipairs(prog) do
+    local it = DB.items[key]
+    local first = it and it.category == "coordinates" and RANDO_CAMPAIGN.first_visit(it.planet)
+    if first and next(RANDO_CAMPAIGN.prereqs(first)) ~= nil then tight[#tight + 1] = key else keep[#keep + 1] = key end
+  end
+  for i = 1, #prog do prog[i] = nil end
+  for _, key in ipairs(keep) do prog[#prog + 1] = key end
+  for _, key in ipairs(tight) do prog[#prog + 1] = key end
+  return prog
+end
+
 -- reward order of the leftover (non-Gold-Bolt) locations: story missions first
-local KIND_RANK = { goldbolt = 0, planet = 1, story = 2, side = 2, armor_source = 2, collectible = 3 }
+-- (10.1: Spybots and Lorbs share rank 2, so goldbolts_first gives them items too)
+local KIND_RANK = { goldbolt = 0, planet = 1, story = 2, side = 2, armor_source = 2, collectible = 2 }
 
 local function attempt(seed_text, s, fp, n, yield)
   local rng = G.rng(G.fnv1a(fp .. "#" .. n))
@@ -924,10 +1048,14 @@ local function attempt(seed_text, s, fp, n, yield)
   end
   -- 7.0 start_items: items you always start with (from this seed's pool)
   local notes = {}
+  local omega_set = {}
+  for _, k in ipairs(G.omega_keys(s)) do omega_set[k] = true end
   for key in s.start_items:gmatch("[^,%s]+") do
     local found
     for _, it in ipairs(items) do if it.key == key then found = it end end
-    if registry[key] and registry[key]:sub(1, 5) == "start" then
+    if omega_set[key] then
+      -- dev 10.15: an Omega version starts after the fill (below), so nothing else moves
+    elseif registry[key] and registry[key]:sub(1, 5) == "start" then
       -- already there (Hoverboots, Map-O-Matic)
     elseif not found then
       notes[#notes + 1] = "start_items: " .. key .. " is not an item this seed randomizes - ignored"
@@ -974,10 +1102,12 @@ local function attempt(seed_text, s, fp, n, yield)
   s._shop_closed = closed
   -- start weapons: any weapon the shop does not sell
   local wleft = 0
-  for _, it in ipairs(items) do if category(it.key) == "weapon" and not registry[it.key] then wleft = wleft + 1 end end
+  for _, it in ipairs(items) do
+    if category(it.key) == "weapon" and not registry[it.key] and not G.reward_only(it.key) then wleft = wleft + 1 end
+  end
   local start_w = math.max(0, math.min(s.start_weapons, wleft))
   if start_w < s.start_weapons then s._start_short = start_w end
-  take(function(it) return category(it.key) == "weapon" and not fixed[it.key] end, start_w)
+  take(function(it) return category(it.key) == "weapon" and not fixed[it.key] and not G.reward_only(it.key) end, start_w)
   take(function(it) return category(it.key) == "gadget" end, s.start_gadgets)
   s._shop_slots = shop_slots
   -- 7.0 prices: what each of the 15 slots costs (nil: every slot keeps the game's own price).
@@ -1010,7 +1140,9 @@ local function attempt(seed_text, s, fp, n, yield)
     local ws = {}
     for _, it in ipairs(items) do if not registry[it.key] and category(it.key) == "weapon" then ws[#ws + 1] = it end end
     rng.shuffle(ws)
-    for j, it in ipairs(ws) do it.class = (j <= need) and "progression" or "useful" end
+    -- 10.1: a reward the game also hands out never counts as a weapon the logic waits for
+    G.stable_sort(ws, function(a, b) return not G.DUD_REWARDS[a.key] and G.DUD_REWARDS[b.key] ~= nil end)
+    for j, it in ipairs(ws) do it.class = (j <= need and not G.DUD_REWARDS[it.key]) and "progression" or "useful" end
   end
   for _, g in ipairs(DB.start_kit) do if DB.items[g] then registry[g] = "start (game kit)" end end
   for _, g in ipairs(G.GAME_GIVEN) do if DB.items[g] then registry[g] = "start (game kit)" end end
@@ -1037,7 +1169,9 @@ local function attempt(seed_text, s, fp, n, yield)
     rng.shuffle(early)
     local ws = {}
     for _, it in ipairs(items) do
-      if not registry[it.key] and category(it.key) == "weapon" and it.class ~= "progression" then ws[#ws + 1] = it.key end
+      if not registry[it.key] and category(it.key) == "weapon" and it.class ~= "progression" and not G.DUD_REWARDS[it.key] then
+        ws[#ws + 1] = it.key
+      end
     end
     rng.shuffle(ws)
     local used = 0
@@ -1048,7 +1182,10 @@ local function attempt(seed_text, s, fp, n, yield)
     -- may go to a location the start reaches: it needs nothing)
     if s.planet_locks and early[used + 1] then
       local cs = {}
-      for _, it in ipairs(items) do if not registry[it.key] and category(it.key) == "coordinates" then cs[#cs + 1] = it.key end end
+      -- (dev 10.11: only Coordinates whose first visit can be played once found there)
+      for _, it in ipairs(items) do
+        if not registry[it.key] and category(it.key) == "coordinates" and G.spot_ok(s, it.key, early[used + 1]) then cs[#cs + 1] = it.key end
+      end
       if #cs > 0 then
         local key = cs[rng.below(#cs) + 1]
         placement[early[used + 1]] = key; registry[key] = "location"
@@ -1065,6 +1202,7 @@ local function attempt(seed_text, s, fp, n, yield)
       if ca ~= cb then return ca end
       return false
     end)
+    G.constrained_last(s, prog)
     while #prog > 0 do
       local key = table.remove(prog)
       local res = G.solve(s, pool, placement, start, prog)
@@ -1073,6 +1211,7 @@ local function attempt(seed_text, s, fp, n, yield)
         if DB.locations[lid].holds ~= "filler" then spots[#spots + 1] = lid end
       end
       if #spots == 0 then return nil, "no reachable location left for " .. key end
+      spots = G.filter_spots(s, key, spots, notes)
       local lid = rng.pick(spots)
       placement[lid] = key; registry[key] = "location"
       if yield then yield() end
@@ -1108,6 +1247,18 @@ local function attempt(seed_text, s, fp, n, yield)
       for j = 1, quota[k] do spots[#spots + 1] = by_kind[k][j] end
     end
     rng.shuffle(spots)
+    -- 10.1: a reward the game also hands out goes to a location that is not a Gold Bolt when one is
+    -- taken by another item (they swap)
+    for i, key in ipairs(left) do
+      if G.DUD_REWARDS[key] and spots[i] and DB.locations[spots[i]].kind == "goldbolt" then
+        for j = 1, math.min(#left, #spots) do
+          if DB.locations[spots[j]].kind ~= "goldbolt" and not G.DUD_REWARDS[left[j]] then
+            left[i], left[j] = left[j], left[i]
+            break
+          end
+        end
+      end
+    end
     for i, key in ipairs(left) do
       if spots[i] then placement[spots[i]] = key; registry[key] = "location"
       elseif category(key) == "weapon" then
@@ -1118,8 +1269,10 @@ local function attempt(seed_text, s, fp, n, yield)
       else registry[key] = "excluded (no location left)" end
     end
   else
+    -- (10.1: a reward the game also hands out is not counted: it never takes a Gold Bolt here)
+    local function bolt_item(key) return G.bolt_worthy(key) and not G.DUD_REWARDS[key] end
     local worthy = 0
-    for _, it in ipairs(items) do if not registry[it.key] and G.bolt_worthy(it.key) then worthy = worthy + 1 end end
+    for _, it in ipairs(items) do if not registry[it.key] and bolt_item(it.key) then worthy = worthy + 1 end end
     if worthy < #bolts then
       return nil, string.format("too few items for one per Gold Bolt: %d items for %d Gold Bolts", worthy, #bolts)
     end
@@ -1135,6 +1288,7 @@ local function attempt(seed_text, s, fp, n, yield)
       if ca ~= cb then return ca end
       return false
     end)
+    G.constrained_last(s, prog)
     local function free_locations(reach, logic_only)
       local out = {}
       for _, loc in ipairs(pool) do
@@ -1174,7 +1328,7 @@ local function attempt(seed_text, s, fp, n, yield)
       end
       local ws = {}
       for _, it in ipairs(items) do
-        if not registry[it.key] and category(it.key) == "weapon" and it.class ~= "progression" and G.bolt_worthy(it.key) then
+        if not registry[it.key] and category(it.key) == "weapon" and it.class ~= "progression" and bolt_item(it.key) then
           ws[#ws + 1] = it.key
         end
       end
@@ -1186,9 +1340,12 @@ local function attempt(seed_text, s, fp, n, yield)
       end
       if s.planet_locks and s.early_weapons > 0 then
         local cs = {}
-        for _, it in ipairs(items) do if not registry[it.key] and category(it.key) == "coordinates" then cs[#cs + 1] = it.key end end
+        local lid = early_spot()
+        -- (dev 10.11: only Coordinates whose first visit can be played once found there)
+        for _, it in ipairs(items) do
+          if lid and not registry[it.key] and category(it.key) == "coordinates" and G.spot_ok(s, it.key, lid) then cs[#cs + 1] = it.key end
+        end
         if #cs > 0 then
-          local lid = early_spot()
           if lid then
             local key = cs[rng.below(#cs) + 1]
             placement[lid] = key; registry[key] = "location"; early_placed = early_placed + 1
@@ -1218,6 +1375,7 @@ local function attempt(seed_text, s, fp, n, yield)
         spots = keep
       end
       if #spots == 0 then return nil, "no reachable location left for " .. key end
+      spots = G.filter_spots(s, key, spots, notes)
       local deep = {}
       for _, lid in ipairs(spots) do if not base[lid] then deep[#deep + 1] = lid end end
       if #deep > 0 and #spots - #deep <= #prog then spots = deep end
@@ -1239,7 +1397,7 @@ local function attempt(seed_text, s, fp, n, yield)
     rng.shuffle(free_bolts)
     local left = {}
     for _, key in ipairs(ordered) do
-      if #free_bolts > 0 and G.bolt_worthy(key) then
+      if #free_bolts > 0 and bolt_item(key) then
         local lid = table.remove(free_bolts)
         placement[lid] = key; registry[key] = "location"
       else
@@ -1270,6 +1428,35 @@ local function attempt(seed_text, s, fp, n, yield)
       elseif fi > #free then registry[key] = "excluded (no location left)" else
         placement[free[fi]] = key; registry[key] = "location"; fi = fi + 1
       end
+    end
+  end
+  -- dev 10.15 Omega versions: after everything else, on locations currency would take (above)
+  local okeys = G.omega_keys(s)
+  if #okeys > 0 then
+    local orng = G.rng(G.fnv1a(fp .. "#omega#" .. n))
+    local chosen = {}
+    for key in s.start_items:gmatch("[^,%s]+") do chosen[key] = true end
+    local list = {}
+    for _, key in ipairs(okeys) do
+      if chosen[key] then start[#start + 1] = key; registry[key] = "start (chosen)"
+      else list[#list + 1] = key end
+    end
+    local spots = {}
+    for _, loc in ipairs(pool) do
+      if not placement[loc.id] and loc.kind ~= "goldbolt" and DB.locations[loc.id].holds ~= "filler" then spots[#spots + 1] = loc.id end
+    end
+    orng.shuffle(spots)
+    G.stable_sort(spots, function(a, b)
+      return (KIND_RANK[DB.locations[a].kind] or 9) < (KIND_RANK[DB.locations[b].kind] or 9)
+    end)
+    orng.shuffle(list)
+    local placed = 0
+    for i, key in ipairs(list) do
+      if spots[i] then placement[spots[i]] = key; registry[key] = "location"; placed = placed + 1
+      else registry[key] = "excluded (no location left)" end
+    end
+    if placed < #list then
+      notes[#notes + 1] = string.format("omega_weapons: only %d of %d Omega versions found a location (the rest are not in this seed)", placed, #list)
     end
   end
   -- 7.0 currency: every other location gives Bolts or Raritanium, each its own amount (none
@@ -1326,6 +1513,7 @@ local function attempt(seed_text, s, fp, n, yield)
     shop_prices = s._shop_prices, currency_totals = totals, notes = notes,
     start_coords = start_coords, shop_closed = s._shop_closed,
     hub_route = res.hub_route, hub_first = res.hub_first,
+    coords_exceptions = s._coords_exceptions,
   }
 end
 
@@ -1345,7 +1533,7 @@ function G.generate(seed_text, user, preset, yield)
   while true do
     for _ = 1, 30 do
       n = n + 1
-      local r, err = attempt(seed_text, eff, fp, n, yield)
+      local r, err = attempt(seed_text, eff, G.placement_fingerprint(seed_text, s), n, yield)
       if r then
         if r.start_short then
           warnings[#warnings + 1] = string.format("start_weapons lowered to %d: no other weapon is left once the shop has its shop_weapons", r.start_short)
@@ -1459,7 +1647,8 @@ function G.package(seed_text, s, preset, fp, r, warnings, requested)
     for _, id in ipairs(r.hub_route or {}) do route[#route + 1] = id end
     hub = { planet = RANDO_CAMPAIGN.HUB_PLANET, checkpoints = RANDO_CAMPAIGN.HUB_CHECKPOINTS,
             start = RANDO_CAMPAIGN.HUB_START, destinations = RANDO_CAMPAIGN.hub_destinations(),
-            route = route, finale_planet = RANDO_CAMPAIGN.BY_ID.finale.planet }
+            route = route, finale_planet = RANDO_CAMPAIGN.BY_ID.finale.planet,
+            coords_first_visit = s.coords_first_visit == true, coords_exceptions = sorted_keys(r.coords_exceptions or {}) }
   end
   return {
     format = 10, generator = G.VERSION, data = DB.version, hub = hub,
@@ -1525,10 +1714,15 @@ function G.audit(seed)
         if item.category == "currency" then bad(lid .. " holds currency as an item") end
       end
       if loc and loc.holds == "filler" then bad(lid .. " is a filler-only armor source but holds " .. it) end
+      -- 10.1: Spybots and Lorbs are never in logic: no Coordinates there
+      if kind == "collectible" and item and item.category == "coordinates" then bad(lid .. " (a collectible, out of logic) holds " .. it) end
     elseif (kind ~= "goldbolt" or s.distribution == "spread") and #G.filler_kinds(s) > 0 then
       bad(lid .. " holds nothing although currency rewards are on")
     end
     if kind == "armor_source" and not s.armor then bad(lid .. " is an armor source with armor = false") end
+    if kind == "collectible" and not (s.collectibles and G.COLLECTIBLE_LOCATIONS[loc.collectible]) then
+      bad(lid .. " is a collectible location although collectibles = false (or it is not a reward collectible)")
+    end
   end
   -- 7.0 the currency budget: the total stays within it, unless the minimum alone is above it
   for _, fk in ipairs({ "bolts", "raritanium" }) do
@@ -1598,6 +1792,24 @@ function G.audit(seed)
       for _, id in ipairs(RANDO_CAMPAIGN.HUB_START) do
         if not reach[id] then bad("hub: the starting mission " .. id .. " cannot be played with the start") end
       end
+      -- dev 10.11: Coordinates (and gadgets a location needs) never on a revisit or the finale, and
+      -- a planet's Coordinates only where its first visit can be played once they are found
+      if s.coords_first_visit then
+        local exc = {}
+        for _, k in ipairs(h.coords_exceptions or {}) do exc[k] = true end
+        local gating = gating_gadgets(s)
+        for _, lid in ipairs(sorted_keys(seed.locations)) do
+          local key = seed.locations[lid].item
+          local it = key and DB.items[key]
+          local seg = RANDO_CAMPAIGN.location_segment(lid, DB.locations[lid].planet)
+          if it and not exc[key] and (it.category == "coordinates" or gating[key]) then
+            local ok, why
+            if it.category == "coordinates" then ok, why = RANDO_CAMPAIGN.coords_spot_ok(it.planet, seg, DB.locations[lid].kind)
+            else ok, why = RANDO_CAMPAIGN.progression_spot_ok(seg) end
+            if not ok then bad("coords_first_visit: " .. key .. " at " .. lid .. ": " .. tostring(why)) end
+          end
+        end
+      end
     end
   elseif seed.hub then
     bad("a hub plan in a seed without hub = true")
@@ -1627,6 +1839,7 @@ function G.audit(seed)
     else
       if not (seed.shop.mode ~= "shuffle" or excluded_set(s)[k]) then moved = moved + 1 end
       if DB.items[w] and DB.items[w].acquisition == "arsenal_restored" then bad(w .. " (ARSENAL_RESTORED) is sold in the shop") end
+      if G.reward_only(w) then bad(w .. " is a reward-only weapon but is sold in the shop") end
       if sold[w] then bad(w .. " is sold in two vendor slots") end
       sold[w] = k
       if not (G.in_weapon_pool(w, s) or w == k) then bad(w .. " is sold but is not in the weapon pool") end
@@ -1644,10 +1857,31 @@ function G.audit(seed)
         bad(key .. " has " .. routes .. " routes (start, shop, location)")
       end
       if not G.in_weapon_pool(key, s) and seen[key] then bad(key .. " (" .. tostring(it.acquisition) .. ") is placed") end
+      if G.reward_only(key) and s.weapons and not exs[key] and seen[key] == "start" then
+        local r = seed.registry[key] or ""
+        if r ~= "start (chosen)" and r ~= "start (no location left)" then bad(key .. " is a reward-only weapon but starts (" .. r .. ")") end
+      end
       if not G.in_weapon_pool(key, s) and sold[key] and sold[key] ~= key then bad(key .. " is sold in another slot") end
     end
   end
   if seed.shop.mode == "shuffle" and moved > s.shop_weapons then bad(moved .. " vendor slots sell a seed weapon, above shop_weapons " .. s.shop_weapons) end
+  -- dev 10.15: Omega versions only with omega_weapons; at most one route each (a location or a
+  -- chosen start), never a Gold Bolt, never sold
+  local omega_on = {}
+  for _, k in ipairs(G.omega_keys(s)) do omega_on[k] = true end
+  for _, key in ipairs(sorted_keys(DB.items)) do
+    if DB.items[key].category == "omega" then
+      local where = seen[key]
+      if where and not omega_on[key] then bad(key .. " is placed although omega_weapons is off (or it is excluded)") end
+      if where and where ~= "start" and DB.locations[where] and DB.locations[where].kind == "goldbolt" then bad(key .. " is on a Gold Bolt") end
+      if where == "start" and seed.registry[key] ~= "start (chosen)" then bad(key .. " starts without being chosen in start_items") end
+      if sold[key] then bad(key .. " is sold in the shop") end
+      if omega_on[key] and not where and not (seed.registry[key] or ""):find("^excluded") then bad(key .. " has no route and is not excluded") end
+    end
+  end
+  for _, w in pairs(seed.shop.slots or {}) do
+    if DB.items[w] and DB.items[w].category == "omega" then bad("a vendor slot sells " .. w) end
+  end
   for _, key in ipairs(sorted_keys(seed.registry)) do
     local route = seed.registry[key]
     if route == "location" and not (seen[key] and seen[key] ~= "start") then bad(key .. " registered at a location but not placed") end
@@ -1678,15 +1912,17 @@ function G.audit(seed)
   end
   if nbolts ~= 25 then bad("the game has 25 Gold Bolts, the data has " .. nbolts) end
   -- 10.0 spread: the start's own reach holds early_weapons weapons (as many as the seed has left)
-  -- (with weapon_logic the weapons the logic counts are progression and go where the fill puts them)
+  -- (with weapon_logic the weapons the logic counts are progression and go where the fill puts them;
+  -- 10.1: a reward the game also hands out, G.DUD_REWARDS, is not an early weapon and not counted)
   if s.distribution == "spread" and s.weapon_logic == "none" and seed.spheres and seed.spheres[1] then
     local early_w, reward_w = 0, 0
+    local function real_weapon(it) return it and DB.items[it] and DB.items[it].category == "weapon" and not G.DUD_REWARDS[it] end
     for _, lid in ipairs(seed.spheres[1]) do
       local it = seed.locations[lid] and seed.locations[lid].item
-      if it and DB.items[it] and DB.items[it].category == "weapon" then early_w = early_w + 1 end
+      if real_weapon(it) then early_w = early_w + 1 end
     end
     for _, l in pairs(seed.locations) do
-      if l.item and DB.items[l.item] and DB.items[l.item].category == "weapon" then reward_w = reward_w + 1 end
+      if real_weapon(l.item) then reward_w = reward_w + 1 end
     end
     local spots = 0
     for _, lid in ipairs(seed.spheres[1]) do if DB.locations[lid].holds ~= "filler" then spots = spots + 1 end end
@@ -1736,7 +1972,10 @@ function G.spoiler(seed)
   w("Data ", seed.data, ", generated in attempt ", seed.attempt)
   w("")
   w("SETTINGS")
-  for _, k in ipairs(sorted_keys(seed.settings)) do w("  ", k, " = ", tostring(seed.settings[k])) end
+  for _, k in ipairs(sorted_keys(seed.settings)) do
+    local d = G.FINGERPRINT_SINCE_10_15[k]
+    if d == nil or seed.settings[k] ~= d then w("  ", k, " = ", tostring(seed.settings[k])) end
+  end
   w("")
   if seed.warnings and #seed.warnings > 0 then
     w("NOTES (settings adjusted or capped for this seed)")
@@ -1818,7 +2057,7 @@ function G.spoiler(seed)
                         p and string.format("%d Bolts", p) or string.format("(%s Bolts)", tostring(DB.items[k].price or "?"))))
       end
     end
-    w("  Shatterbomb and RYNO 8 (after all 10 Spybots) stay in their own slots; ammo and upgrades as usual")
+    w("  Shatterbomb and RYNO 8 are rewards (listed below): their own vendor slots are closed; ammo and upgrades as usual")
     w("  No weapon is both sold and given: a weapon at the start or at a location is never in a shop slot,")
     w("  and a slot of another vendor (ARSENAL_RESTORED's) selling such a weapon is closed by the runtime")
     if seed.shop.prices then w("  New prices apply only once the runtime finds the game's own prices in memory (TROUBLESHOOTING.md)") end
@@ -1826,6 +2065,22 @@ function G.spoiler(seed)
   w("")
   w("ARMOR: " .. (seed.armor and "the armor pieces you can find are rewards above and below; each armor source (pocket dimension, Zurkie's challenge, the Lorb monk) gives the item listed for it instead of its own piece"
                   or "not randomized (armor = false)"))
+  if seed.settings.omega_weapons then
+    w("OMEGA VERSIONS (omega_weapons = true; Challenge Mode / New Game+). Each is a reward of its own,")
+    w("  separate from the weapon. Found first, it also gives the normal weapon (its prerequisite);")
+    w("  the normal weapon found later never takes the Omega away. Where each one is:")
+    local where = {}
+    for lid, l in pairs(seed.locations) do if l.item and DB.items[l.item] and DB.items[l.item].category == "omega" then where[l.item] = lid end end
+    local started = {}
+    for _, k in ipairs(seed.start.items) do started[k] = true end
+    for _, key in ipairs(sorted_keys(DB.items)) do
+      local it = DB.items[key]
+      if it.category == "omega" then
+        local at = (started[key] and "the start") or (where[key] and DB.locations[where[key]].name) or (seed.registry[key] or "not in this seed")
+        w(string.format("  %-28s %-34s %s", it.name, "(" .. it.game_name .. ")", at))
+      end
+    end
+  end
   if seed.filler and #seed.filler.kinds > 0 then
     local f = seed.filler
     w("CURRENCY: a location without an item gives " .. table.concat(f.kinds, " or ") .. " (amounts listed below)")
@@ -1847,12 +2102,14 @@ function G.spoiler(seed)
   plist[#plist + 1] = "~anywhere"
   for _, pid in ipairs(plist) do
     if by_planet[pid] then
-      local pname = pid == "~anywhere" and "Anywhere (armor sources and collectibles)" or DB.locations["planet:" .. pid] and (DB.planets[planet_index(pid)].name)
+      local pname = pid == "~anywhere" and "Anywhere (armor sources and Spybots)" or DB.locations["planet:" .. pid] and (DB.planets[planet_index(pid)].name)
       w("  ", pname)
       for _, lid in ipairs(by_planet[pid]) do
         local l = seed.locations[lid]
+        local kind = DB.locations[lid].kind
         w(string.format("    %-22s %-44s %s%s", lid, DB.locations[lid].name, names(l.item or "-"),
-                        (l.in_logic or DB.locations[lid].kind == "armor_source") and "" or "  [out of logic]"))
+                        (l.in_logic or kind == "armor_source") and ""
+                        or kind == "collectible" and "  [out of logic: pays once its pickup event is bound]" or "  [out of logic]"))
       end
     end
   end

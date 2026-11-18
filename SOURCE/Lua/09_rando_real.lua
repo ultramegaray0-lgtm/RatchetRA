@@ -46,7 +46,7 @@
 --     from their own queue (G.give_currency); nothing is retried once the game took the message
 --   * G.lookup_config asks the helper where a loaded config lives (kind 7, read only), for the
 --     shop (12_rando_shop.lua)
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["09_rando_real"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["09_rando_real"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_REAL = RANDO_REAL or {}
 local G = RANDO_REAL

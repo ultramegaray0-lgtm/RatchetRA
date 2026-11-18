@@ -44,10 +44,10 @@
 --   guide  public walkthrough (gamepressure mission list, vulkk gear guide); NOT verified in the
 --          game files. The research kit (companion/research/Research-Campaign.bat) replaces these
 --          with the real names; tools/build_campaign_registry.py merges them.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["03_rando_campaign"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["03_rando_campaign"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
 RANDO_CAMPAIGN = {}
 local C = RANDO_CAMPAIGN
-C.VERSION = "10.0.6"
+C.VERSION = "10.0.23"
 
 -- story abilities: no item config exists, so only the story itself hands them out
 C.STORY_ABILITIES = { phantom_dash = true, hurlshot = true, speetle = true, dragon_mount = true, wallrun = true }
@@ -65,39 +65,63 @@ C.SEGMENTS = {
     grants = { "phantom_dash" }, title = "Market, Club Nefarious, follow the Phantom, the statue" },
   { id = "sargasso_1", planet = "sargasso", visit = 1, hero = "rivet", src = "game",
     missions = { "MIS_SARG_01_FIRST_VISIT", "MIS_SARG_01_CLANKPUZZLE" }, boss = "Seekerpede", arrival = "story",
+    intros = { "CHK_SARG_GELFACTORY_LANDINGPAD" },
     title = "Reach the Morts, Rivet's hideout, Seekerpede" },
   { id = "scarstu_1", planet = "scarstu", visit = 1, hero = "ratchet", src = "game",
     missions = { "MIS_ZURK_01_VISIT_01" }, entry = "CHK_ZURK_LANDING_SHIP", start_cp = "CHK_ZURK_00_DEFAULT", boss = "Francois (arena)",
+    intros = { "CHK_ZURK_00_DEFAULT" },
     title = "Zurkie's Gastropub, defeat Francois" },
   { id = "savali_1", planet = "savali", visit = 1, hero = "ratchet", src = "game",
-    missions = { "MIS_SAV_01" }, entry = "CHK_SAV_01_LANDING",
+    missions = { "MIS_SAV_01" }, entry = "CHK_SAV_01_LANDING", intros = { "CHK_SAV_01_LANDING", "CHK_SAV_01_START" },
     title = "Village attack, Lombax lore, three temples, the Archives" },
   { id = "blizar_1", planet = "blizar_prime", visit = 1, hero = "rivet", src = "game",
     missions = { "MIS_BLIZAR" }, entry = "CHK_BLIZAR_A_LANDINGPAD",
+    intros = { "CHK_BLIZAR_B_LANDINGPAD_DESTROYED", "CHK_BLIZAR_A_LANDINGPAD" },
     title = "Blockade, the miners, the drill, Phase Quartz" },
   { id = "torren_1", planet = "torren_iv", visit = 1, hero = "rivet", src = "game",
-    missions = { "MIS_MOL_01_FIRST_VISIT" }, requires = { "hoverboots" },
+    missions = { "MIS_MOL_01_FIRST_VISIT" }, requires = { "hoverboots" }, intros = { "CHK_MOL_START" },
     grants = { "hurlshot" }, boss = "the Fixer (chase)", title = "Find the Fixer, the Hurlshot, escape" },
   { id = "cordelion_1", planet = "cordelion", visit = 1, hero = "ratchet", src = "game",
-    missions = { "MIS_CORD_01_FIRST_VISIT" }, entry = "CHK_CORD_A_START", boss = "Cordelion boss",
+    missions = { "MIS_CORD_01_FIRST_VISIT" }, entry = "CHK_CORD_A_START", boss = "Cordelion boss", intros = { "CHK_CORD_A_START" },
     title = "Kedaro Station, the Rubion Forge, a new Dimensionator" },
   { id = "scarstu_2", planet = "scarstu", visit = 2, hero = "rivet", src = "game",
     missions = { "MIS_ZURK_02B_VISIT_02B" }, after = { "scarstu_1" }, title = "Meet Ratchet in the Gastropub" },
   { id = "ardolis_1", planet = "ardolis", visit = 1, hero = "ratchet", src = "game",
-    missions = { "MIS_ARD_01_FIRST_VISIT" }, entry = "CHK_ARD_START", requires = { "hoverboots" },
+    missions = { "MIS_ARD_01_FIRST_VISIT" }, entry = "CHK_ARD_START", requires = { "hoverboots" }, intros = { "CHK_ARD_START" },
     title = "Pierre Le Fer, treasure hunt, Pirate Trials, Captain Quantum" },
   { id = "sargasso_2", planet = "sargasso", visit = 2, hero = "rivet", src = "game",
     missions = { "MIS_SARG_02_REVISIT_SHIPS" }, entry = "CHK_SARG_02_MININGPLATFORM_LANDINGPAD", after = { "sargasso_1" },
+    intros = { "CHK_SARG_02_MININGPLATFORM_LANDINGPAD" },
     title = "Protect the Morts, free the Seekerpede, Nefarious' ships" },
   { id = "savali_2", planet = "savali", visit = 2, hero = "ratchet", src = "game",
     missions = { "MIS_SVALI_02_SECOND_VISIT" }, after = { "savali_1" }, title = "The Archives' machines, the catacombs" },
   { id = "viceron_1", planet = "viceron", visit = 1, hero = "rivet", src = "game",
     missions = { "MIS_ZORD_01" }, entry = "CHK_ZORDOOM_START", requires = { "ability:phantom_dash", "ability:hurlshot" },
+    intros = { "CHK_ZORDOOM_START" },
     boss = "Zordoom Prison warden", title = "Find Ratchet and Kit, reactor shutdown, follow the cell" },
   { id = "finale", planet = "corson_v", visit = 2, hero = "ratchet", src = "game",
     missions = { "MIS_MEGA_FINALE" }, entry = "CHK_MEGA_FINALE_START", kind = "finale", boss = "Emperor Nefarious",
+    intros = { "CHK_MEGA_FINALE_START" },
     title = "The final battle" },
 }
+-- dev 10.11 INTROS: where a visit's story begins when you arrive on its planet (its arrival scene),
+-- first entry first; the second is the other point a stuck first step is loaded at. A first visit
+-- is loaded there while its story has not left its first step (15_rando_hub.lua H.load_point). From
+-- the logs, in order of strength:
+--   * the ship's planet menu's own landing with the visit's mission active (the game chooses it):
+--     scarstu_1 CHK_ZURK_00_DEFAULT (rounds 14, 16, 23), savali_1 CHK_SAV_01_LANDING and blizar_1
+--     CHK_BLIZAR_B_LANDINGPAD_DESTROYED (round 17 lines 1065 and 1113, after the game had started
+--     MIS_SAV_01 and MIS_BLIZAR at the end of Zurkie's first visit). Blizar's first visit lands on the
+--     destroyed side; 10.0 went to the intact pad (CHK_BLIZAR_A_LANDINGPAD), now the second choice.
+--     A "_POSTINTRO" / "_POSTCINE" twin (CHK_BLIZAR_B_LANDINGPAD_DESTROYED_POSTINTRO,
+--     CHK_SARG_02_MININGPLATFORM_LANDINGPAD_POSTCINE) says the plain name plays the intro.
+--   * a story that ran from a warp there: CHK_ARD_START (round 20), CHK_SAV_01_START (round 20: the
+--     first step finished on landing).
+--   * names your game lists as the planet's start (rounds 24-26 catalog): CHK_MOL_START,
+--     CHK_CORD_A_START, CHK_ZORDOOM_START, CHK_MEGA_FINALE_START. Not warped to yet.
+--   * sargasso_1: the game's own arrival (rounds 16 and 23) loads hash 2498464355 right after the tunnel
+--     (CHK_TRANSITION_TO_SARG) with MIS_SARG_01_FIRST_VISIT active: C.OPENINGS, found by its hash at
+--     run time; CHK_SARG_GELFACTORY_LANDINGPAD (the catalog's Sargasso pad) if the game does not list it.
 -- 8.4 (round 20): the hero of each visit, checked against the walkthroughs (Ratchet & Clank wiki
 -- plot; gamepressure; thegamer) and against round 17/20: a story's first "go to <planet>" step
 -- finished only when the visit's own hero was there (Ardolis, Savali, Zurkie's 1 as Ratchet: at
@@ -380,6 +404,8 @@ C.HUB_LABEL = { corson_intro = "Prologue - the parade on Corson V",
 -- Not part of the seed's hub plan: seeds, fingerprints and placements stay 10.0.2's.
 C.OPENINGS = {
   nefcity_1 = { hash = 3046787773, codes = { "NEFCITY", "NEF_" }, with = { "MIS_NEFCITY_01_TRAINSTATION" } },
+  -- dev 10.11: Sargasso's first visit, as the game itself arrives (rounds 16 and 23, after the tunnel)
+  sargasso_1 = { hash = 2498464355, codes = { "SARG" } },
 }
 C.IN_HUB_START = {}
 for i, id in ipairs(C.HUB_START) do C.IN_HUB_START[id] = i end
@@ -413,8 +439,10 @@ function C.hub_destinations()
     for _, g in ipairs(seg.grants) do grants[#grants + 1] = g end
     local missions = {}
     for _, m in ipairs(seg.missions or {}) do missions[#missions + 1] = m end
+    local intros = {}
+    for _, cp in ipairs(seg.intros or {}) do intros[#intros + 1] = cp end
     out[#out + 1] = { id = seg.id, planet = seg.planet, visit = seg.visit, hero = seg.hero, kind = C.hub_kind(seg),
-                      missions = missions, title = seg.title, entry = seg.entry, start_cp = seg.start_cp,
+                      missions = missions, title = seg.title, entry = seg.entry, start_cp = seg.start_cp, intros = intros,
                       after = after, requires = req, grants = grants, boss = seg.boss,
                       start = C.IN_HUB_START[seg.id] ~= nil, label = C.HUB_LABEL[seg.id] }
   end
@@ -468,8 +496,8 @@ function C.hub_reach(dests, owned, start_kit)
   return done, order
 end
 
--- the destinations playable now at run time (ids; the starting missions first, then registry
--- order). done: id -> truthy; access: planet -> true (the runtime's S.access); owned(item) -> bool
+-- the destinations playable now at run time (ids; the starting missions first, then first visits,
+-- revisits, the finale). done: id -> truthy; access: planet -> true (the runtime's S.access); owned(item) -> bool
 function C.hub_available(plan, done, access, owned)
   local abilities = {}
   for _, k in ipairs(RANDO_DATA and RANDO_DATA.start_kit or {}) do abilities[k] = true end
@@ -481,17 +509,126 @@ function C.hub_available(plan, done, access, owned)
   local function has(r) return kit[r] or (owned and owned(r)) or false end
   local ids = {}
   for _, d in ipairs(plan.destinations) do ids[#ids + 1] = d.id end
-  local first, rest = {}, {}
+  -- dev 10.11: first visits before revisits ("players get to first visits first, not revisits"),
+  -- the finale last; each group in registry order
+  local first, fresh, again, last = {}, {}, {}, {}
   for _, d in ipairs(plan.destinations) do
     if C.hub_playable(d, done, access, has, abilities, ids) then
-      if d.start then first[#first + 1] = d else rest[#rest + 1] = d end
+      if d.start then first[#first + 1] = d
+      elseif d.kind == "finale" then last[#last + 1] = d
+      elseif (d.visit or 1) >= 2 then again[#again + 1] = d
+      else fresh[#fresh + 1] = d end
     end
   end
   table.sort(first, function(a, b) return (C.IN_HUB_MENU[a.id] or 99) < (C.IN_HUB_MENU[b.id] or 99) end)
   local out = {}
-  for _, d in ipairs(first) do out[#out + 1] = d.id end
-  for _, d in ipairs(rest) do out[#out + 1] = d.id end
+  for _, group in ipairs({ first, fresh, again, last }) do
+    for _, d in ipairs(group) do out[#out + 1] = d.id end
+  end
   return out
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- dev 10.11: COORDINATES OPEN A FIRST VISIT. Asked for: "make sure players get to coordinates or
+-- first visits first, not revisits". Two placement rules the generator keeps for a hub seed
+-- (setting coords_first_visit = true, the default), checked by the audit:
+--   1. No progression item (Coordinates above all) is at a location of a revisit (a planet's second
+--      visit: Zurkie's 2, Sargasso 2, Savali 2) or of the finale. The way to the next planet never
+--      runs through a revisit; revisits only hold ordinary rewards.
+--   2. A planet's Coordinates are only where that planet's first visit can be played the moment
+--      they are found: every visit it waits for (abilities, `after`) is already done there. In this
+--      registry that is Viceron (Phantom Dash: Nefarious City's story; the Hurlshot: Torren IV's), so
+--      Viceron's Coordinates are a reward of Torren IV's story. The hub's own story (C.HUB_STORY)
+--      counts as done for every other visit: the ship's travel is off while it runs (v0.53).
+-- What "done" means at a location: a story mission, its milestone and a side activity pay when their
+-- visit FINISHES (15_rando_hub.lua H.finish), so their visit is done; a Gold Bolt, an armor pod or a
+-- collectible is found while the visit is still being played.
+-- ---------------------------------------------------------------------------------------------
+C.FINISH_KINDS = { planet = true, story = true, side = true }
+function C.is_revisit(seg) return seg ~= nil and (seg.kind == "finale" or (seg.visit or 1) >= 2) end
+-- the visit of a planet that is played first there (the prologue for Corson V)
+function C.first_visit(planet)
+  local best
+  for _, seg in ipairs(C.SEGMENTS) do
+    if seg.planet == planet and (not best or seg.visit < best.visit) then best = seg end
+  end
+  return best
+end
+-- the visits that grant an ability
+function C.granters(ability)
+  local out = {}
+  for _, seg in ipairs(C.SEGMENTS) do
+    for _, g in ipairs(seg.grants) do if g == ability then out[#out + 1] = seg.id end end
+  end
+  return out
+end
+-- the visits that must be finished before seg can be played (after, ability granters), recursively;
+-- out: id -> true
+local function prereqs(seg, out)
+  out = out or {}
+  local direct = {}
+  for _, a in ipairs(seg.after or {}) do direct[#direct + 1] = a end
+  for _, r in ipairs(seg.requires or {}) do
+    local ab = r:match("^ability:(.+)$")
+    if ab then for _, id in ipairs(C.granters(ab)) do direct[#direct + 1] = id end end
+  end
+  if seg.kind == "finale" then
+    for _, other in ipairs(C.SEGMENTS) do if other.id ~= seg.id then direct[#direct + 1] = other.id end end
+  end
+  for _, id in ipairs(direct) do
+    if not out[id] then
+      out[id] = true
+      if C.BY_ID[id] then prereqs(C.BY_ID[id], out) end
+    end
+  end
+  return out
+end
+C.prereqs = prereqs
+-- the visits surely done when a location of kind `kind` in visit seg_id is collected (id -> true)
+function C.done_at(seg_id, kind)
+  local seg = C.BY_ID[seg_id]
+  local out = {}
+  if not seg then return out end
+  prereqs(seg, out)
+  if C.FINISH_KINDS[kind] then out[seg_id] = true end
+  -- the hub's own story is played first: the ship's travel stays off while it runs
+  if seg_id ~= C.HUB_STORY and seg.kind ~= "intro" then out[C.HUB_STORY] = true end
+  return out
+end
+-- rule 1: may a progression item be at a location of visit seg_id?
+function C.progression_spot_ok(seg_id)
+  local seg = seg_id and C.BY_ID[seg_id]
+  if C.is_revisit(seg) then return false, seg_id .. " is a revisit" end
+  return true
+end
+-- rule 2: may planet's Coordinates be at a location of kind `kind` in visit seg_id? Item
+-- requirements (Hoverboots) are not looked at here: they are owned from the start.
+function C.coords_spot_ok(planet, seg_id, kind)
+  local ok, why = C.progression_spot_ok(seg_id)
+  if not ok then return false, why end
+  local first = C.first_visit(planet)
+  if not first or not seg_id then return true end
+  if first.id == seg_id then return false, "the Coordinates of " .. planet .. " on " .. planet .. " itself" end
+  local done = C.done_at(seg_id, kind)
+  for id in pairs(prereqs(first)) do
+    if not done[id] then return false, first.id .. " waits for " .. id .. ", which is not done at " .. seg_id .. " (" .. tostring(kind) .. ")" end
+  end
+  return true
+end
+
+-- dev 10.11: why destination d is not playable now (nil when it is); same arguments as C.hub_available
+function C.hub_why(plan, d, done, access, owned)
+  local abilities, kit = {}, {}
+  for _, k in ipairs(RANDO_DATA and RANDO_DATA.start_kit or {}) do abilities[k] = true; kit[k] = true end
+  for _, x in ipairs(plan.destinations) do
+    if done[x.id] then for _, g in ipairs(x.grants or {}) do abilities[g] = true end end
+  end
+  local function has(r) return kit[r] or (owned and owned(r)) or false end
+  local ids = {}
+  for _, x in ipairs(plan.destinations) do ids[#ids + 1] = x.id end
+  local ok, why = C.hub_playable(d, done, access, has, abilities, ids)
+  if ok then return nil end
+  return why
 end
 
 -- spoiler text: the start, then one possible route (the order destinations become playable when
@@ -504,7 +641,17 @@ function C.hub_describe(plan, planet_name, coords_at)
   L[#L + 1] = "  Open from the start:"
   for i, id in ipairs(C.HUB_MENU) do L[#L + 1] = string.format("    %d. %s", i, C.HUB_LABEL[id]) end
   L[#L + 1] = "  Every other destination opens when you hold its planet's Coordinates and what it depends on"
-  L[#L + 1] = "  is done. One possible route (the solver's order):"
+  L[#L + 1] = "  is done."
+  if plan.coords_first_visit then
+    L[#L + 1] = "  Coordinates always open a first visit: they are never on a revisit or the finale, and"
+    L[#L + 1] = "  wherever a planet's Coordinates are, its first visit can be played as soon as you have them"
+    L[#L + 1] = "  (Viceron's are a reward of Torren IV's story). Flying to a new planet starts its first"
+    L[#L + 1] = "  mission at the planet's intro."
+    for _, k in ipairs(plan.coords_exceptions or {}) do
+      L[#L + 1] = "  Exception in this seed: " .. k .. " (no location fitted the rule)"
+    end
+  end
+  L[#L + 1] = "  One possible route (the solver's order):"
   for i, id in ipairs(plan.route or {}) do
     local d
     for _, x in ipairs(plan.destinations) do if x.id == id then d = x end end

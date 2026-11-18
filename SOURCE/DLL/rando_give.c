@@ -294,6 +294,38 @@ static void find_config_manager(u8 *base) {
 	RG_U32(g_state.mailbox, MB_CONFIG_SIGS) = total;
 }
 
+/* v7: the SceneManager, by rivet_hook's own signature over the exe's code sections; published only
+ * when it matched exactly once */
+static void find_scene_manager(u8 *base) {
+	u32 total = 0;
+	u8 *first = 0;
+	__try {
+		u8 *nt = base + *(u32 *)(base + 0x3C);
+		WORD sections = *(WORD *)(nt + 6), opt = *(WORD *)(nt + 20);
+		u8 *sec = nt + 24 + opt;
+		if (*(u32 *)nt != 0x00004550u) { /* "PE\0\0" */
+			return;
+		}
+		for (WORD i = 0; i < sections; ++i, sec += 40) {
+			u32 vsize = *(u32 *)(sec + 8), rva = *(u32 *)(sec + 12), flags = *(u32 *)(sec + 36);
+			u32 m = 0;
+			u8 *found;
+			if (!(flags & 0x20000000u)) { /* IMAGE_SCN_MEM_EXECUTE */
+				continue;
+			}
+			found = rg_find_scene_manager(base + rva, vsize, &m);
+			if (found && !first) {
+				first = found;
+			}
+			total += m;
+		}
+	} __except (1) {
+		first = 0;
+	}
+	RG_U64(g_state.mailbox, MB_SCENE_MGR) = (total == 1) ? (u64)first : 0;
+	RG_U32(g_state.mailbox, MB_SCENE_SIGS) = total;
+}
+
 static void start(void *module) {
 	volatile u8 *mb = 0;
 	u8 *base = (u8 *)GetModuleHandleA(0);
@@ -331,6 +363,8 @@ static void start(void *module) {
 	RG_U32(mb, MB_V6) = rg_verify_v6(&g_state);
 	/* v5: the config manager, by signature over the exe's code sections */
 	find_config_manager(base);
+	/* v7: the SceneManager (read only; Lua reads the script variables through it) */
+	find_scene_manager(base);
 
 	/* never unloaded: rivet_hook frees "renderdoc" at exit while the game may still run */
 	GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN, (const char *)&start, &pinned);

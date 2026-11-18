@@ -14,6 +14,13 @@
 --   13_rando_armor.lua         armor sources become reward locations
 --   14_rando_travel.lua        locked travel and checkpoint names
 --   15_rando_hub.lua           OPTIONAL: planet shuffle (the Nefarious City hub)
+--   16_rando_spawners.lua      OPTIONAL: the spawner layer enemy.lua and boss.lua share (dev 10.12)
+--   boss.lua                   OPTIONAL: the Boss Randomizer (boss-tier enemies; = key, off by default)
+--   17_rando_omega.lua         OPTIONAL: sets the game's Omega flag of a weapon for an Omega reward (dev 10.15;
+--                              developer kit only until it has run in the game: docs/OMEGA.md)
+--   chaos.lua                  OPTIONAL: the Chaos Randomizer (anything becomes anything, NO guards;
+--                              BACKSPACE key, off by default; priority over enemy.lua / boss.lua) (dev 10.13)
+--   enemy.lua                  OPTIONAL: the Enemy Randomizer (regular enemies; - key, off by default)
 --   dev(*).lua                 developer tools only; never part of a release (see R.kit_check)
 --
 -- How a run works:
@@ -30,12 +37,12 @@
 --      and planet rewards wait for that planet's Coordinates.
 -- Engine calls are wrapped in pcall; errors are logged as RANDO-ERROR and never switch the
 -- randomizer off.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["10_rando_runtime"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["10_rando_runtime"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
 
 RANDO = RANDO or {}
 local R = RANDO
-R.KIT_VERSION = "10.0.6"
-R.RELEASE = "v0.55"                 -- the public release this kit belongs to (the start banner)
+R.KIT_VERSION = "10.0.23"
+R.RELEASE = "v0.60"                   -- the public release this kit belongs to (the start banner)
 local DB = RANDO_DATA
 local GEN = RANDO_GEN
 local BIND = RANDO_BINDINGS or {}
@@ -124,6 +131,43 @@ R.config = {
   hub_return_delay = 12,             -- seconds before that
   hub_hero_swap = true,              -- a destination's hero is set before its story starts
   hub_follow_story = false,          -- true: when the game's own story takes you to an open destination, play it
+  -- dev 10.11 (planet shuffle: a new planet starts its first mission at its intro)
+  hub_prime_open = true,             -- between stories, the next visit of every open planet is made active,
+                                     -- as the game does at the end of a visit: the ship's flight lands at its intro
+  hub_planet_intro = true,           -- a first visit loads at its intro (C.SEGMENTS intros) while its story
+                                     -- has not left its first step | false: 10.0's start/landing order
+  hub_follow_new = true,             -- the game's own story travel to a planet whose first visit is open
+                                     -- (Coordinates held) is played there instead of undone
+  hub_blocked_home = true,           -- landing on a planet whose first visit cannot be played yet (it waits
+                                     -- for another visit) sends you back with the reason, never a revisit
+  -- dev 10.12: enemy.lua / boss.lua (16_rando_spawners.lua). Both OFF by default; their keys switch them in
+  -- the game (the save remembers it); these two settings only decide the start of a save that never did
+  enemy_randomizer = false,          -- regular enemies of combat encounters are replaced (same family, same planet)
+  boss_randomizer = false,           -- boss-tier enemies of combat encounters are shuffled (story bosses never)
+  key_enemies = "-",                 -- Enemy Randomizer on/off (Ctrl: what it changed here)
+  key_bosses = "=",                  -- Boss Randomizer on/off (Ctrl: what it changed here)
+  spawner_runtime = true,            -- false: neither changes anything, whatever the keys say
+  -- dev 10.27: "vars" = the Enemy Randomizer writes spawner script variables (the method round37 proved in the
+  -- game); "census" = the old Prius census route of 10.12-10.20 (never found a Templates list in a real game; kept
+  -- for the tests of the code the Boss and Chaos Randomizers still use)
+  enemy_route = "vars",
+  boss_route = "vars",                -- dev 10.29: the Boss Randomizer on the same engine ("census": the old route)
+  enemy_notify = true,               -- dev 10.29: an on-screen note for every replaced spawner (false: rivet.log only)
+  -- dev 10.30: combat compatibility. "verified": only replacements with in-game evidence that they die (round40: some
+  -- that spawned could not be killed); "trial": also unverified ones of the same bot class, one spawner per level,
+  -- watched - for developer test rounds; "any": the 10.29 rules, NOT safe (simulator tests of the scheduling)
+  -- dev 10.31: "all" (this dev kit's default): every regular enemy can replace every other; only pairs the game showed
+  -- cannot be killed stay out. enemy_mix_movement = true mixes walkers / flyers / turrets in "all" (dev 10.32: off).
+  enemy_compat = "all",
+  enemy_mix_movement = false,        -- dev 10.32: OFF (round42: walkers at flyer spawns could not be killed)
+  -- dev 10.13: chaos.lua. OFF by default; NO safety guards (docs/CHAOS.md); while ON the two above pause
+  chaos_randomizer = false,          -- anything can become anything (the start of a save that never used its key)
+  key_chaos = "BACKSPACE",           -- Chaos Randomizer on/off (Ctrl: what it changed here)
+  chaos_cross_planet = true,         -- the pool includes templates seen on every planet (false: this planet's only)
+  -- dev 10.15: Omega versions (17_rando_omega.lua; the generator's omega_weapons puts them in the seed)
+  omega_runtime = true,              -- false: Omega rewards are only recorded, the game's flag is never written
+  omega_flag_offset = -1,            -- developer override: the Omega flag's byte offset after the weapon's item id
+                                     -- in its inventory record (1-1024); -1 = learned in the game (docs/OMEGA.md)
   -- developer keys and test travel: only used by the dev(*).lua files
   key_status = ";", key_campaign = "'", key_hub = "]", key_hub_return = "[", key_story = "/",
   key_test_travel = ".", key_test_point = ",", legacy_f_keys = true, test_travel = false,
@@ -142,7 +186,8 @@ local RETIRED_RUNTIME = {
 }
 local SETTINGS = RANDO_SETTINGS or {}
 local KEY_SETTINGS = { key_status = true, key_campaign = true, key_test_travel = true, key_test_point = true,
-                       key_hub = true, key_hub_return = true, key_story = true, key_shuffle = true }
+                       key_hub = true, key_hub_return = true, key_story = true, key_shuffle = true,
+                       key_enemies = true, key_bosses = true, key_chaos = true }
 local GEN_OPTIONS = {}
 for k, v in pairs(SETTINGS) do
   if R.config[k] ~= nil then
@@ -239,7 +284,8 @@ end
 local STATE_TABLES = { "collected", "paid", "banked", "access", "inventory", "story_missions", "planets_detected",
                        "bolts_seen", "armor_found", "armor_sets_done", "collectibles", "visited",
                        "history", "real", "real_nodes", "tracked", "gadgets_seen", "weapons", "gadgets",
-                       "armor_sources", "currency_queue", "shop_given" }
+                       "armor_sources", "currency_queue", "shop_given",
+                       "omega", "omega_prereq" }           -- dev 10.15: Omega tier per weapon, prerequisites given
 local function fill_defaults(s)
   for _, k in ipairs(STATE_TABLES) do s[k] = s[k] or {} end
   s.planets_done = s.planets_done or 0
@@ -288,13 +334,27 @@ local function grant(key, quiet, prefix)
       say(prefix .. it.name .. " - mission rewards on " .. planet_name(it.planet) .. " are yours now")
     end
     pay_banked(it.planet)
+    -- dev 10.11: the hub says what opens and makes it active for the ship's flight
+    if SEED.hub and RANDO_HUB and RANDO_HUB.on_access then
+      local okh, eh = pcall(RANDO_HUB.on_access, it.planet)
+      if not okh then log("RANDO-ERROR hub access", tostring(eh)) end
+    end
     return
   end
+  -- dev 10.15: an Omega version (R.grant_omega below)
+  if it.category == "omega" then R.grant_omega(key, quiet, prefix); return end
   if it.category == "weapon" or it.category == "gadget" or it.category == "pickup" then
     S.inventory[key] = true
     if it.category == "weapon" then S.weapons[key:sub(8)] = true end
     changed()
     local real = RANDO_REAL and RANDO_REAL.request(key)
+    -- dev 10.15: the weapon is already Omega (its Omega reward came first). The weapon was given then as
+    -- the Omega's prerequisite, so this reward adds nothing and sends nothing new (RANDO_REAL.request
+    -- never sends an item twice): the Omega is kept
+    if it.category == "weapon" and S.omega[key:sub(8)] then
+      say(prefix .. it.name .. " - you have its Omega version already (kept)")
+      return
+    end
     if real == "queued" then
       if not quiet then say(prefix .. it.name .. " - adding it to your inventory") end
     elseif real == "done" then
@@ -327,6 +387,76 @@ local function grant(key, quiet, prefix)
   say(prefix .. it.name)
 end
 R.grant = grant
+
+-- ---------------------------------------------------------------------------------------
+-- dev 10.15 OMEGA VERSIONS (docs/OMEGA.md). In your game an Omega weapon is not an item of its own:
+-- it is the weapon you own with its WeaponItemPrius.Omega flag set (the game's type data; no Omega item
+-- config exists, and AddToInventoryAction only gives item configs). So per weapon the randomizer keeps
+-- a TIER: 0 not owned, 1 the weapon (S.weapons), 2 Omega (S.omega). The two rewards stay separate items
+-- (S.inventory["weapon:x"], S.inventory["omega:x"]), each recorded when it is found.
+--   * Omega first, weapon not owned: the weapon is given first as the Omega's prerequisite
+--     (S.omega_prereq; the reward recorded is the Omega), then its flag is set (17_rando_omega.lua).
+--   * Omega with the weapon owned: only the flag (the weapon is never sent again).
+--   * the weapon after its Omega: recorded, nothing sent, the Omega kept (grant above).
+--   * the same reward twice (a restore, a replayed location): recorded once, nothing sent.
+-- The tier only goes up. Without 17_rando_omega.lua, or before it has learned where your game keeps
+-- the flag, the Omega is recorded as pending and set later (the module retries after each load).
+-- ---------------------------------------------------------------------------------------
+function R.omega_tier(w)
+  if not S then return 0 end
+  if S.omega[w] then return 2 end
+  if S.weapons[w] then return 1 end
+  return 0
+end
+function R.grant_omega(key, quiet, prefix)
+  local it = DB.items[key]
+  local wkey = it.weapon
+  local w = wkey:sub(8)
+  local wname = item_name(wkey)
+  history("received " .. it.name)
+  S.inventory[key] = true
+  if S.omega[w] then
+    changed()
+    if not quiet then say(prefix .. it.name .. " (you have it already)") end
+    return "kept"
+  end
+  local prereq = not S.weapons[w]
+  if prereq then
+    S.weapons[w] = true
+    S.omega_prereq[w] = true
+    history("  " .. wname .. " given first: " .. it.name .. " needs the weapon")
+  end
+  S.omega[w] = { status = "pending", at = math.floor((rivet.time and rivet.time()) or 0) }
+  changed()
+  -- the weapon itself must be in the game first; for a weapon already sent or owned this sends nothing
+  local real = RANDO_REAL and RANDO_REAL.request(wkey)
+  local om = RANDO_OMEGA and RANDO_OMEGA.request and RANDO_OMEGA.request(w)
+  local how
+  if om == "applied" then how = "it is Omega now"
+  elseif om == "pending" then how = "its Omega flag is set as soon as the weapon is in your inventory"
+  elseif om == "learning" then how = "recorded - set once the randomizer has found your game's Omega flag (docs/OMEGA.md)"
+  elseif om == "off" then how = "recorded (omega_runtime = false: the game's flag is not written)"
+  else how = "recorded (17_rando_omega.lua is not installed: the game's flag is not written)" end
+  if quiet then
+    -- (the start: R.start_text names it)
+  elseif prereq then
+    local got = (real == "queued" or real == "done") and (wname .. " added first") or (wname .. " recorded first")
+    say(prefix .. it.name .. " - " .. got .. " (an Omega needs the weapon); " .. how, { type = "corner", duration = 7 })
+  else
+    say(prefix .. it.name .. " - your " .. wname .. " becomes Omega; " .. how, { type = "corner", duration = 7 })
+  end
+  return om or "recorded"
+end
+-- the Omega the randomizer gave for weapon w is in the game (17_rando_omega.lua): the tier is final
+function R.omega_applied(w, why)
+  local o = S and S.omega[w]
+  if not o then return end
+  if o.status ~= "applied" then
+    o.status, o.how = "applied", why
+    changed()
+    history("Omega " .. item_name("weapon:" .. w) .. " applied (" .. tostring(why) .. ")")
+  end
+end
 
 -- ---------------------------------------------------------------------------------------
 -- locations
@@ -594,7 +724,10 @@ function R.reset_for_new_game(why)
   local old = S
   -- kept: what was learned about the game (not the run), and the player's planet shuffle choice
   local keep = { real_mode = old.real_mode, weapon_types = old.weapon_types, hub_learned = old.hub_learned,
-                 planet_shuffle = old.planet_shuffle }
+                 planet_shuffle = old.planet_shuffle,
+                 omega_cal = old.omega_cal }    -- dev 10.15: where your game keeps the Omega flag (learned once)
+  -- dev 10.12: the Enemy / Boss Randomizer switches and what was learned about the game's enemies
+  for _, k in ipairs((RANDO_SPAWNERS and RANDO_SPAWNERS.KEEP_OVER_NEW_GAME) or {}) do keep[k] = old[k] end
   S = fresh_state((old.run or 1) + 1); R.state = S
   for k, v in pairs(keep) do S[k] = v end
   S.previous_run = { run = old.run or 1, collected = count(old.collected), bolts = 0, complete = old.campaign_complete or nil }
@@ -604,6 +737,7 @@ function R.reset_for_new_game(why)
   if RANDO_CAMPAIGN_RT and RANDO_CAMPAIGN_RT.new_game then pcall(RANDO_CAMPAIGN_RT.new_game) end
   if RANDO_TRAVEL and RANDO_TRAVEL.new_game then pcall(RANDO_TRAVEL.new_game) end
   if RANDO_HUB and RANDO_HUB.new_game then pcall(RANDO_HUB.new_game) end
+  if RANDO_OMEGA and RANDO_OMEGA.new_game then pcall(RANDO_OMEGA.new_game) end
   history("NEW GAME: run " .. S.run .. " of seed " .. SEED.seed .. " (" .. why .. "); run " .. S.previous_run.run ..
           " had " .. S.previous_run.collected .. " location(s)")
   R.begin()
@@ -680,6 +814,10 @@ function R.status_text()
   if armor then real = real and (real .. " | " .. armor) or armor end
   local shop = RANDO_SHOP and RANDO_SHOP.status_text and RANDO_SHOP.status_text()
   if shop then real = real and (real .. " | " .. shop) or shop end
+  for _, m in ipairs({ RANDO_OMEGA, RANDO_CHAOS, RANDO_ENEMY, RANDO_BOSS }) do
+    local t = m and m.status_text and m.status_text()
+    if t then real = real and (real .. " | " .. t) or t end
+  end
   local test = RANDO_TEST_TRAVEL and RANDO_TEST_TRAVEL.status_text and RANDO_TEST_TRAVEL.status_text()
   if test then real = real and (real .. " | " .. test) or test end
   return string.format("%sGold Bolts %d/%d | rewards %d/%d%s%s | planets %d%s%s%s",
@@ -695,6 +833,13 @@ end
 R.GEN_BUDGET = 0.002                  -- seconds of generation work per frame
 local gen_job
 local event_buffer = {}               -- events that arrive before the seed is ready
+-- dev 10.23: classes the buffer never drops (up to BUFFER_KEEP_MAX); the others share BUFFER_MAX
+R.BUFFER_KEEP = { PlanetChangedEvent = true, LevelLoadedEvent = true, CheckpointTriggeredEvent = true,
+  SaveDataAppliedEvent = true, MissionStateChangedEvent = true, ObjectiveStateChangedEvent = true,
+  StartMissionDevstatsEvent = true, EndMissionDevstatsEvent = true, WeaponAddedEvent = true, GadgetItemAddedEvent = true,
+  GainBoltEvent = true, GainRaritaniumEvent = true, PurchaseWeaponEvent = true }
+R.BUFFER_MAX, R.BUFFER_KEEP_MAX = 500, 2000
+R.buffer_kept, R.buffer_dropped = 0, {}
 local seed_source = { text = nil, why = nil }
 
 local function random_seed_text()
@@ -817,7 +962,8 @@ end
 -- sources and finds, gadgets and the shop's one-time gift are kept.
 R.MERGE_SETS = { "collected", "paid", "banked", "bolts_seen", "story_missions", "planets_detected", "inventory",
                  "weapons", "access", "tracked", "armor_found", "armor_sources", "armor_sets_done", "gadgets_seen",
-                 "visited", "shop_given", "gadgets" }
+                 "visited", "shop_given", "gadgets", "omega_prereq" }
+R.OMEGA_RANK = { ["pending"] = 1, ["applied"] = 2 }
 R.STATUS_RANK = { failed = 1, queued = 2, sent = 3, owned = 4, confirmed = 5 }
 function R.merge_live(live, S)
   local restored_paid = {}
@@ -846,6 +992,13 @@ function R.merge_live(live, S)
   if added > 0 then log("RANDO-SAVE kept", added, "currency payment(s) from before the restore") end
   -- the armor baseline is measured once: a save without one takes this session's
   if S.armor_baseline == nil and type(live.armor_baseline) == "table" then S.armor_baseline = live.armor_baseline end
+  -- dev 10.15: an Omega tier is never lost by a restore (the furthest status wins)
+  S.omega = S.omega or {}
+  for w, o in pairs(live.omega or {}) do
+    local old = S.omega[w]
+    if type(o) == "table" and (type(old) ~= "table" or (R.OMEGA_RANK[o.status] or 0) > (R.OMEGA_RANK[old.status] or 0)) then S.omega[w] = o end
+  end
+  if type(live.omega_cal) == "table" and type(S.omega_cal) ~= "table" then S.omega_cal = live.omega_cal end
   if type(live.weapon_types) == "table" then
     S.weapon_types = S.weapon_types or {}
     for t, it in pairs(live.weapon_types) do if S.weapon_types[t] == nil then S.weapon_types[t] = it end end
@@ -873,6 +1026,9 @@ function rando_import_state(tbl)
   if live and live.started then R.merge_live(live, S) end
   -- v0.54: planet shuffle on/off (the 0 key) as this session or the save has it
   if RANDO_HUB and RANDO_HUB.after_restore then pcall(RANDO_HUB.after_restore) end
+  -- dev 10.12: the Enemy / Boss Randomizer switches likewise; what this session learned is kept
+  if RANDO_SPAWNERS and RANDO_SPAWNERS.after_restore then pcall(RANDO_SPAWNERS.after_restore, live) end
+  if RANDO_OMEGA and RANDO_OMEGA.after_restore then pcall(RANDO_OMEGA.after_restore) end
   R.restored = true
   if R.new_game_pending then
     R.new_game_pending = nil
@@ -985,8 +1141,21 @@ local function try_subscribe(sub)
     if not ok1 then log("RANDO-ERROR discover", sub.class, tostring(e1)) end
     if not sub.fn then return end
     if not SEED or not S then
-      -- keep it for after generation (bounded)
-      if event_buffer and #event_buffer < 500 then event_buffer[#event_buffer + 1] = { fn = sub.fn, ev = ev, class = sub.class } end
+      -- keep it for after generation (bounded). dev 10.23: your dev 10.22 log (round33) started the companion
+      -- late; 500 events filled the buffer on NefCity and the PlanetChangedEvent to Zurkon was DROPPED, so the
+      -- whole session believed it was on NefCity. Events that say where you are or what you did are kept
+      -- (R.BUFFER_KEEP_MAX); only the rest shares the old bound (spawns, deaths, health bars: stale by then).
+      if event_buffer then
+        local keep = R.BUFFER_KEEP[sub.class]
+        local cap = keep and R.BUFFER_KEEP_MAX or R.BUFFER_MAX
+        local n = keep and R.buffer_kept or (#event_buffer - R.buffer_kept)
+        if n < cap then
+          event_buffer[#event_buffer + 1] = { fn = sub.fn, ev = ev, class = sub.class }
+          if keep then R.buffer_kept = R.buffer_kept + 1 end
+        else
+          R.buffer_dropped[sub.class] = (R.buffer_dropped[sub.class] or 0) + 1
+        end
+      end
       return
     end
     local ok2, e2 = pcall(sub.fn, ev)
@@ -1007,6 +1176,7 @@ local function on(class, fn)
   local sub = { class = class, fn = fn }
   if not try_subscribe(sub) and not sub.dead then pending[#pending + 1] = sub end
 end
+R.subscribe = on                      -- dev 10.12: for the optional files loaded after this one
 function R.retry_subscriptions()
   if #pending == 0 then return 0 end
   local still = {}
@@ -1064,7 +1234,10 @@ for _, c in ipairs({ "MissionStartedEvent", "MissionObjectiveCompleteEvent",
                      "MissionDeactivatedEvent", "StartMissionDevstatsEvent", "EndMissionDevstatsEvent",
                      "PurchaseWeaponEvent", "VendorPurchaseEvent", "WeaponAddedEvent",
                      "LevelLoadedEvent", "SaveDataAppliedEvent", "PlanetMenuAcceptEvent",
-                     "GainBoltEvent", "GainRaritaniumEvent" }) do on(c) end
+                     "GainRaritaniumEvent" }) do on(c) end
+-- dev 10.33: bolts drop from killed enemies - the Enemy Randomizer's stall watch takes them as "the fight goes on"
+-- (round43 B3: kills, bolts, and not one BotDeathCompleteEvent). Same subscription as before (it was discovery only).
+on("GainBoltEvent", function(ev) if R.on_gain_bolt then R.on_gain_bolt(ev) end end)
 
 -- bind a key by name; every press is logged (RANDO-KEY), so a key the game never passes on shows
 -- up as missing in rivet.log. Returns true when bound.
@@ -1146,7 +1319,8 @@ end
 R.KIT_FILES = { "01_rando_data", "02_rando_generator", "03_rando_campaign", "04_rando_settings", "05_rando_bindings",
                 "06_rando_capabilities", "09_rando_real", "10_rando_runtime", "11_rando_campaign", "12_rando_shop",
                 "13_rando_armor", "14_rando_travel" }
-R.OPTIONAL_FILES = { "15_rando_hub" }
+R.OPTIONAL_FILES = { "15_rando_hub", "16_rando_spawners", "17_rando_omega", "enemy", "boss", "chaos" }
+R.DEV_ONLY_OPTIONAL = { boss = true, chaos = true }   -- v0.60: never in a player package (tools/build_public_release.py)
 -- scripts of older versions that must not be in the folder any more
 R.GONE_FILES = { ["16_rando_testtravel"] = "a developer tool, now dev(testtravel).lua" }
 function R.kit_check()
@@ -1176,17 +1350,33 @@ function R.kit_check()
   end
   local optional = {}
   for _, f in ipairs(R.OPTIONAL_FILES) do
-    if files[f] == nil then optional[#optional + 1] = f .. " not installed" else check(f, files[f]) end
+    -- v0.60: a randomizer that only the developer kit has is not named when it is absent (player packages)
+    if files[f] == nil then
+      if not R.DEV_ONLY_OPTIONAL[f] then optional[#optional + 1] = f .. " not installed" end
+    else check(f, files[f]) end
   end
+  -- dev 10.30: developer tools live in dev_scripts\ (not in a release's scripts folder). One of ANOTHER version in the
+  -- scripts folder is a leftover (round40: dev(spawnprobe).lua of an older round still loaded, its listener the source
+  -- of every "ran past the 8 ms frame budget" error): it is named for deletion, apart from the required scripts.
+  local stale = {}
   for f, v in pairs(files) do
-    if f:sub(1, 4) == "dev(" then dev[#dev + 1] = f; check(f, v) end
+    if f:sub(1, 4) == "dev(" then
+      if v ~= R.KIT_VERSION then stale[#stale + 1] = f .. ".lua (" .. tostring(v or "no version") .. ")" else dev[#dev + 1] = f end
+    end
   end
-  table.sort(dev)
-  if #dev > 0 then log("RANDO-KIT developer files loaded (not part of a release): " .. table.concat(dev, ", ")) end
+  table.sort(dev); table.sort(stale)
+  if #dev > 0 then log("RANDO-KIT developer files loaded (diagnostics, not part of a release - remove them for normal play): " .. table.concat(dev, ", ")) end
+  if #stale > 0 then
+    log("RANDO-ERROR RANDO-KIT delete from the scripts folder: " .. table.concat(stale, ", ") ..
+        " - an old developer file (developer tools are in the kit's dev_scripts folder now and never needed to play)")
+    say("Randomizer: delete the old developer file(s) " .. table.concat(stale, ", ") .. " from the scripts folder - see rivet.log",
+        { type = "center", duration = 10 })
+  end
+  log("RANDO-KIT release " .. tostring(R.RELEASE) .. " (kit " .. R.KIT_VERSION .. ")")
   if #missing == 0 and #other == 0 then
     log("RANDO-KIT all " .. #R.KIT_FILES .. " required scripts are " .. R.KIT_VERSION ..
         (#optional > 0 and (" (" .. table.concat(optional, ", ") .. ")") or ""))
-    return #gone == 0
+    return #gone == 0 and #stale == 0
   end
   log("RANDO-ERROR RANDO-KIT the scripts folder does not hold one version:" ..
       (#missing > 0 and (" missing " .. table.concat(missing, ", ")) or "") ..
@@ -1245,7 +1435,13 @@ local function frame(dt)
   end
   if R.replay_events then
     local buf = R.replay_events; R.replay_events = nil
-    if #buf > 0 then log("RANDO-SEED replaying " .. #buf .. " event(s) that came in while generating") end
+    if #buf > 0 then
+      local dropped = {}
+      for class, n in pairs(R.buffer_dropped) do dropped[#dropped + 1] = class .. " " .. n end
+      table.sort(dropped)
+      log("RANDO-SEED replaying " .. #buf .. " event(s) that came in while generating (" .. R.buffer_kept .. " kept in full; dropped: "
+          .. (#dropped > 0 and table.concat(dropped, ", ") or "none") .. ")")
+    end
     for _, e in ipairs(buf) do
       local ok, err = pcall(e.fn, e.ev)
       if not ok then log("RANDO-ERROR", e.class, tostring(err)) end
@@ -1272,6 +1468,14 @@ local function frame(dt)
   if ready and RANDO_SHOP then
     local okv, ev = pcall(RANDO_SHOP.tick, frames)
     if not okv then log("RANDO-ERROR shop:", tostring(ev)) end
+  end
+  if RANDO_SPAWNERS and RANDO_SPAWNERS.tick then
+    local oks, es = pcall(RANDO_SPAWNERS.tick, frames, ready)
+    if not oks then log("RANDO-ERROR spawners:", tostring(es)) end
+  end
+  if RANDO_OMEGA and RANDO_OMEGA.tick then
+    local oko, eo = pcall(RANDO_OMEGA.tick, frames, ready)
+    if not oko then log("RANDO-ERROR omega:", tostring(eo)) end
   end
   if not announced and ready then
     announced = true

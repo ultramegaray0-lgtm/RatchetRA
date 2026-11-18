@@ -29,7 +29,7 @@ typedef unsigned int u32;
 typedef unsigned long long u64;
 
 #define RG_MAGIC 0x31564947444E4152ULL /* "RANDGIV1" */
-#define RG_VERSION 6u
+#define RG_VERSION 7u
 
 /* mailbox layout (one 4 KiB page, read and written by Lua through rivet.read / rivet.write) */
 #define MB_MAGIC 0x00   /* u64 RG_MAGIC */
@@ -69,6 +69,8 @@ typedef unsigned long long u64;
 #define MB_ARMOR_CALLS 0x110 /* u32 times the game ran VanityGiveBundleAction since start */
 #define MB_CONFIG_MGR 0x118  /* u64 the game's config asset manager (found by rivet_hook's own signature), 0 = not found */
 #define MB_CONFIG_SIGS 0x120 /* u32 how many times that signature matched (1 expected) */
+#define MB_SCENE_MGR 0x128   /* u64 v7: the game's SceneManager (rivet_hook's own SCENE_MANAGER signature), 0 = not exactly one match */
+#define MB_SCENE_SIGS 0x130  /* u32 v7: how many times that signature matched (rivet_hook accepts exactly 1) */
 #define MB_ARMOR_TABLE 0x180 /* u64[RG_ARMOR_MAX] bundle ids to intercept, 0 = free; the helper zeroes an entry it used */
 #define RG_ARMOR_MAX 48u
 #define MB_ARMOR_RING 0x300  /* RG_ARMOR_RING entries of { u64 bundle; u32 seq; u32 what }, entry = seq % RG_ARMOR_RING */
@@ -941,6 +943,51 @@ static u8 *rg_find_config_manager(const u8 *code, u64 size, u32 *matches) {
 		if (!found) {
 			int rel = *(const int *)(code + i + RG_CONFIG_REL);
 			found = (u8 *)(code + i + RG_CONFIG_REL + 4) + rel;
+		}
+	}
+	return found;
+}
+
+/* v7 (dev 10.21): the SceneManager, found exactly as rivet_hook finds it (src/signature.hpp
+ * SCENE_MANAGER "48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 63 75", SCENE_MANAGER_ADDRESS 3: the rel32 of a
+ * lea rcx, [rip + x]; src/overlay_core.cpp load_rel_var). rivet_hook's find_address takes it only when the
+ * signature matches exactly once (limit 1), and your game's rivet.script_node answers (round 31 log), so
+ * it does match once there. The helper only reads the address and publishes it; Lua reads the script
+ * variables through it (SceneManager +0x75A0 scriptVars, +0x75BC scriptVarMax: rivet_hook
+ * src/game/scene_manager.hpp). */
+static const u8 RG_SCENE_SIGNATURE[15] = {
+	0x48, 0x8D, 0x0D, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x63, 0x75,
+};
+static const u8 RG_SCENE_MASK[15] = { /* 1 = the byte must match, 0 = ?? */
+	1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1,
+};
+#define RG_SCENE_REL 3u
+
+/* the first place RG_SCENE_SIGNATURE matches in [code, code + size) and its rel32 target; *matches
+ * counts every match, so the caller can refuse anything but exactly one (as rivet_hook does) */
+static u8 *rg_find_scene_manager(const u8 *code, u64 size, u32 *matches) {
+	u8 *found = 0;
+	*matches = 0;
+	if (size < sizeof RG_SCENE_SIGNATURE) {
+		return 0;
+	}
+	for (u64 i = 0; i + sizeof RG_SCENE_SIGNATURE <= size; ++i) {
+		u32 k = 0;
+		if (code[i] != RG_SCENE_SIGNATURE[0]) {
+			continue;
+		}
+		for (k = 0; k < sizeof RG_SCENE_SIGNATURE; ++k) {
+			if (RG_SCENE_MASK[k] && code[i + k] != RG_SCENE_SIGNATURE[k]) {
+				break;
+			}
+		}
+		if (k != sizeof RG_SCENE_SIGNATURE) {
+			continue;
+		}
+		*matches += 1;
+		if (!found) {
+			int rel = *(const int *)(code + i + RG_SCENE_REL);
+			found = (u8 *)(code + i + RG_SCENE_REL + 4) + rel;
 		}
 	}
 	return found;

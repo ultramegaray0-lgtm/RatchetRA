@@ -1,6 +1,6 @@
-# Installation: Rift Apart Randomizer v0.55
+# Installation: Rift Apart Randomizer v0.60
 
-> Download the player ZIP from the [v0.55 release](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/tag/v0.55). These steps refer to its `GAME_FOLDER` folder.
+> Download the player ZIP from the [v0.60 release](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/tag/v0.60). These steps refer to its `GAME_FOLDER` folder.
 
 About 10 minutes. No programming tools needed.
 
@@ -47,13 +47,34 @@ The game folder then contains:
     hid.dll, rivet_hook.dll, mods\      (rivet_hook)
     rivet.toml                          (randomizer)
     rando_give.dll                      (randomizer)
-    scripts\                            (randomizer: 13 files, 01_rando_data.lua ... 15_rando_hub.lua)
-    rando_companion\                    (randomizer: Start-Companion.bat, RandoCompanion.ps1)
+    scripts\                            (randomizer: 16 files, 01_rando_data.lua ... 17_rando_omega.lua, enemy.lua)
+    rando_companion\                    (randomizer: Start-Companion.bat, RandoCompanion.ps1,
+                                         Install-ArsenalRestored.bat, Install-ArsenalRestored.ps1)
 ```
 
 `rando_give.dll` is required: it puts rewards into your inventory.
-`scripts\15_rando_hub.lua` is optional: without it, planet shuffle is not available and the game's
-normal story plays.
+Optional scripts (delete one to switch its feature off completely):
+
+- `15_rando_hub.lua`: planet shuffle and the trip back to Nefarious City after each planet. Without
+  it the game's normal story plays and you are never taken back.
+- `16_rando_spawners.lua` and `enemy.lua`: the Enemy Randomizer (delete both).
+- `17_rando_omega.lua`: Omega weapons in the game (only used with `omega_weapons = true`).
+
+## Optional: ARSENAL_RESTORED (rivet_hook version)
+
+The randomizer does not include ARSENAL_RESTORED; get it from its author. To install its rivet_hook
+version next to the randomizer:
+
+1. Install the randomizer first (step 4).
+2. Drag the ARSENAL_RESTORED zip (or its extracted folder, or its `.stage` file) onto
+   `rando_companion\Install-ArsenalRestored.bat`, or double-click the `.bat` and paste the path.
+3. The window shows each step: the mod goes to `mods\ARSENAL_RESTORED` (or
+   `mods\ARSENAL_RESTORED.stage`), its own `.lua` files go into `scripts` (never over a randomizer
+   file), and `rivet.toml` lists it (the randomizer's `rivet.toml` already does).
+4. Restart the game. `rivet.log` shows `[loader] mod path mods/ARSENAL_RESTORED is overstrike format.`
+   With `restored_weapons = "auto"` (the default) its 9 weapons join your next New Game's seed.
+
+The Overstrike version of ARSENAL_RESTORED needs no installer: install it with Overstrike.
 
 ## 5. Play
 
@@ -67,8 +88,8 @@ say `all 12 required scripts`. If it says `RANDO-ERROR`, see TROUBLESHOOTING.md.
 
 1. Close the game and the companion window.
 2. If you changed `scripts\04_rando_settings.lua`, copy your values somewhere first.
-3. In the game folder's `scripts` folder, delete every `*_rando_*.lua` file (leave other mods'
-   scripts alone).
+3. In the game folder's `scripts` folder, delete every `*_rando_*.lua` file and `enemy.lua`
+   (leave other mods' scripts alone).
 4. Copy the new `GAME_FOLDER` contents into the game folder, then put your settings back into the
    new `04_rando_settings.lua`.
 5. Keep `rando_companion\randomizer_saves` (your progress and spoilers).
@@ -77,7 +98,8 @@ say `all 12 required scripts`. If it says `RANDO-ERROR`, see TROUBLESHOOTING.md.
 
 The randomizer only adds files. Close the game and the companion, then delete from the game folder:
 
-- the `*_rando_*.lua` files in `scripts` (the whole `scripts` folder only if no other mod uses it);
+- the `*_rando_*.lua` files and `enemy.lua` in `scripts` (the whole `scripts` folder only if no other
+  mod uses it);
 - `rando_give.dll`;
 - `rando_companion\` (this also deletes your randomizer progress and spoilers);
 - `rivet.toml` (put your backup back if you made one).

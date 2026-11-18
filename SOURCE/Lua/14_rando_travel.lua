@@ -29,7 +29,7 @@
 -- checkpoint is logged by name (RANDO-CHECKPOINT) and the hub knows where a mission really starts.
 -- In a hub seed the hub (15_rando_hub.lua) handles arrivals itself while planet shuffle runs; with
 -- planet shuffle off, or without the hub, a hub seed's travel is never locked (T.active).
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["14_rando_travel"] = "10.0.6"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["14_rando_travel"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_TRAVEL = RANDO_TRAVEL or {}
 local T = RANDO_TRAVEL
@@ -277,6 +277,11 @@ function T.on_checkpoint(hash, loaded)
   if RANDO_HUB and RANDO_HUB.on_checkpoint then
     local ok, err = pcall(RANDO_HUB.on_checkpoint, T.last_checkpoint)
     if not ok then log("RANDO-ERROR hub checkpoint", tostring(err)) end
+  end
+  -- dev 10.12: the Enemy / Boss Randomizer (16_rando_spawners.lua): story boss areas, retries, re-reading
+  if RANDO_SPAWNERS and RANDO_SPAWNERS.on_checkpoint then
+    local ok, err = pcall(RANDO_SPAWNERS.on_checkpoint, T.last_checkpoint)
+    if not ok then log("RANDO-ERROR spawners checkpoint", tostring(err)) end
   end
 end
 

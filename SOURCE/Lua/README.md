@@ -1,6 +1,6 @@
-# Lua scripts: v0.55
+# Lua scripts: v0.60
 
-These 13 files go into `<game folder>\scripts`. rivet_hook loads them in name order.
+These 16 files go into `<game folder>\scripts`. rivet_hook loads them in name order.
 
 | File | Role |
 |---|---|
@@ -16,6 +16,9 @@ These 13 files go into `<game folder>\scripts`. rivet_hook loads them in name or
 | `12_rando_shop.lua` | Ms. Zurkon's shop |
 | `13_rando_armor.lua` | armor sources as reward locations |
 | `14_rando_travel.lua` | locked travel and checkpoint names |
-| `15_rando_hub.lua` | **optional**: planet shuffle (the Nefarious City hub) |
+| `15_rando_hub.lua` | **optional**: planet shuffle (the Nefarious City hub) and the trip back after each planet |
+| `16_rando_spawners.lua` | **optional**: the spawner layer of the Enemy Randomizer |
+| `enemy.lua` | **optional**: the Enemy Randomizer (the - key) |
+| `17_rando_omega.lua` | **optional**: Omega weapons in the game (`omega_weapons`, off by default) |
 
-Files 07, 08 and 16 do not exist in a release: those numbers belonged to developer tools.
+Files 07 and 08 do not exist in a release: those numbers belonged to developer tools.
