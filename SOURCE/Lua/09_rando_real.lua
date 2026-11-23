@@ -46,7 +46,7 @@
 --     from their own queue (G.give_currency); nothing is retried once the game took the message
 --   * G.lookup_config asks the helper where a loaded config lives (kind 7, read only), for the
 --     shop (12_rando_shop.lua)
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["09_rando_real"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["09_rando_real"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_REAL = RANDO_REAL or {}
 local G = RANDO_REAL
@@ -276,6 +276,19 @@ function G.restore_inventory(why)
   if RANDO and RANDO.history then RANDO.history("[RESTORE] " .. n .. " item(s) sent again (" .. tostring(why) .. ")") end
   return n
 end
+-- v0.71-DEV2: one weapon sent again, because its record in the game is still an empty slot (17_rando_omega.lua).
+-- Only an item the game already answered for; one it still holds is answered with nothing new. Returns true if queued
+function G.regive(item, why)
+  local s = S(); if not s then return false end
+  local r = s.real and s.real[item]
+  if not r or not (r.status == "confirmed" or r.status == "owned" or r.status == "failed") then return false end
+  if G.busy and G.busy.item == item then return false end
+  r.status, r.restoring, r.tries = "queued", true, 0
+  r.hold, r.skip_visit, r.silent, r.donor_visit = nil, nil, nil, nil
+  changed()
+  log("RANDO-RESTORE", item, "sent again (" .. tostring(why) .. ")")
+  return true
+end
 -- the hub's own trip has landed: look at the load's weapon replay a moment later. `same_planet`:
 -- a warp that loads a checkpoint without a planet change (no PlanetChangedEvent starts the count)
 function G.watch_inventory(why, same_planet)
@@ -479,7 +492,9 @@ function G.hint()
   elseif on_nefarious_city() then
     say(what .. " - no delivery point is loaded in this part of Nefarious City; it is tried again after the next load")
   else
-    say(what .. (count == 1 and " - it arrives" or " - they arrive") .. " on Nefarious City (rando_give.dll is not working)")
+    local lite = RANDO and RANDO.config and RANDO.config.lite
+    say(what .. (count == 1 and " - it arrives" or " - they arrive") .. " on Nefarious City" ..
+        (lite and " (Lite: rewards are handed over there)" or " (rando_give.dll is not working)"))
   end
 end
 
@@ -821,6 +836,12 @@ function G.on_planet_change(new_name)
     G.aux_withdraw("a level load")
   end
   local b = G.busy
+  if b and b.via == "node_currency" then
+    local ok = b.restore()
+    G.busy = nil
+    log("node restored after", b.item, "(a level change)", ok and "ok" or "")
+    return
+  end
   if b and b.via == "native" then
     -- a load replays WeaponAddedEvent for every owned weapon: none of those may be taken as the
     -- answer to a request still in flight. A request the helper has not taken yet is withdrawn.
@@ -885,6 +906,15 @@ function G.on_frame()
   end
   local b = G.busy
   if b and b.via == "native" and b.stage == "handover" then G.native_handover(b); return end
+  if b and b.via == "node_currency" then
+    -- v0.75: a Bolts / Raritanium hand-over through route 1 waits only for its node to be put back
+    if G.frame >= b.sent + b.restore_after then
+      local ok, err = b.restore()
+      G.busy = nil
+      log("node restored after", b.item, ok and "ok" or tostring(err))
+    end
+    return
+  end
   if b then
     if not b.restored and G.frame >= b.sent + b.restore_after then
       local ok, err = b.restore()
@@ -901,6 +931,11 @@ function G.on_frame()
     end
     return
   end
+  -- v0.71-DEV1: config lookups (kind 7: the helper only reads) are served every frame, not every 30th - the shop asks for
+  -- ~20 weapon configs after each load (12_rando_shop.lua), which took ~60 frames each at the old pace
+  if not G.busy and ((G.aux_busy and G.aux_busy.kind == 7) or (G.aux_queue[1] and G.aux_queue[1].kind == 7)) then
+    if G.aux_tick() then return end
+  end
   if G.frame % 30 ~= 0 then return end
   if not G.enabled then
     if not G.warned_off then
@@ -915,12 +950,14 @@ function G.on_frame()
   end
   -- the companion restores the saved state first, so nothing is sent twice after a restart
   if RANDO and not RANDO.restored then
-    if G.frame < G.WAIT_RESTORE then return end
+    -- v0.75: once the runtime has gone ahead without the companion (RANDO.unsaved), nothing is restored any more
+    if G.frame < G.WAIT_RESTORE and not RANDO.unsaved then return end
     if not G.synced_without_save then G.synced_without_save = true; log("no saved state restored - going ahead"); G.sync() end
   end
   if G.aux_tick() then return end
   if #G.pending(false) == 0 then
     if #G.pending(false, true) > 0 and not G.native_ready() then G.hint() end
+    G.currency_by_node()
     return
   end
   local ready = true
@@ -948,6 +985,72 @@ function G.on_frame()
   local list = G.pending(G.node.kind == "donor")
   if #list == 0 then G.hint(); return end
   G.send(list[1])
+end
+
+-- ---- v0.75: Bolts and Raritanium through route 1 (no rando_give.dll: the Lite package) ---------
+-- rando_give.dll gives currency as the AddToInventoryHandle message with a count (aux_start). Without the helper the same
+-- message comes from a real AddToInventoryAction node: its handler gives [node+0x60] item x [node+0x68] count, the very
+-- fields route 1 already writes for weapons and gadgets (count 1). So a currency reward is the currency item's id with its
+-- amount as the count, fired once; the node is put back RESTORE_FRAMES later. Like the helper's route, nothing is retried
+-- once the node fired (a lost payment is better than a doubled one). Only used while the helper is not ready, and only
+-- where such a node is loaded (Nefarious City), after every waiting weapon and gadget.
+-- NOT VERIFIED IN THE GAME: that the node's count is taken as the amount (it is for the helper's message).
+G.CURRENCY_BY_NODE = true
+function G.currency_by_node()
+  local s = S()
+  if not (G.CURRENCY_BY_NODE and s and s.currency_queue and #s.currency_queue > 0) then return false end
+  if G.native_ready() then return false end                          -- the helper's own route (aux_start) pays it
+  if RANDO and RANDO.config and RANDO.config.currency_by_node == false then return false end
+  local ready = true
+  pcall(function() ready = rivet.scene_ready() and rivet.hero() ~= nil end)
+  if not ready or not G.game_running() or G.frame < (G.settle_until or 0) then return false end
+  if G.busy or G.mission_busy or G.aux_busy then return false end
+  if not G.node then
+    if G.frame < G.next_scan then return false end
+    G.next_scan = G.frame + G.SCAN_EVERY
+    G.node = G.find_node()
+    if not G.node then return false end
+    log("using node", G.node.uid, "comp=" .. tostring(G.node.component), "(currency)")
+  end
+  if G.node.kind ~= "node" then return false end
+  local c = s.currency_queue[1]
+  local info, node = ITEMS[c.item], G.node
+  local count = math.floor(tonumber(c.count) or 0)
+  if not (info and info.id) or count <= 0 then
+    table.remove(s.currency_queue, 1); changed()
+    log("currency entry dropped (not deliverable):", tostring(c.item), tostring(c.count)); return true
+  end
+  count = math.min(count, 0x7FFFFFFF)
+  if not G.still_valid(node, node.addr) then log("node is gone (level changed); looking again"); G.node = nil; return false end
+  local at = hexaddr(node.addr + G.ITEM_OFFSET)
+  local okr, before = pcall(rivet.read, at, 12)
+  if not okr or not before or qword_from_text(before) ~= node.original then
+    log("node changed under us; looking again"); G.node = nil; return false
+  end
+  local le_count = string.format("%02X %02X %02X %02X", count & 0xFF, (count >> 8) & 0xFF, (count >> 16) & 0xFF, (count >> 24) & 0xFF)
+  local okw, err = pcall(rivet.write, at, le_hex(info.id) .. " " .. le_count)
+  if not okw then log("write failed:", tostring(err)); G.node = nil; return false end
+  local okv, after = pcall(rivet.read, at, 8)
+  if not okv or qword_from_text(after or "") ~= info.id then
+    pcall(rivet.write, at, before); log("write did not stick; node restored"); G.node = nil; return false
+  end
+  local oks, serr = pcall(rivet.signal, node.component, "In")
+  local restore = function()
+    if not G.still_valid(node, node.addr) then return true, "node gone - nothing to put back" end
+    return pcall(rivet.write, at, before)
+  end
+  if not oks then
+    restore()
+    log("currency via node: signal refused:", tostring(serr), "- tried again later")
+    G.node = nil
+    return false
+  end
+  table.remove(s.currency_queue, 1)
+  changed()
+  G.busy = { item = c.item, kind = "currency", via = "node_currency", sent = G.frame, gsent = G.gframe, restored = false,
+             restore_after = G.RESTORE_FRAMES, restore = restore, visit = G.visit }
+  log("sent", count, c.item, info.id, "via node", node.uid, "fired (" .. tostring(c.why) .. ")")
+  return true
 end
 
 -- ---- route 0: rando_give.dll mailbox ------------------------------------------------------
@@ -998,7 +1101,14 @@ function G.native_probe()
       if ok and text and text:upper():gsub("%s+$", "") == G.NATIVE_MAGIC then n.addr = a; break end
     end
     if not n.addr then
-      if not n.reported then n.reported = true; log("direct delivery: rando_give.dll is not loaded (check rivet.toml [renderdoc])") end
+      if not n.reported then
+        n.reported = true
+        if RANDO and RANDO.config and RANDO.config.lite then
+          log("direct delivery: none in the Lite package - rewards go through Nefarious City's AddToInventoryAction nodes (route 1)")
+        else
+          log("direct delivery: rando_give.dll is not loaded (check rivet.toml [renderdoc])")
+        end
+      end
       return false
     end
     n.seq = u32_at(n.addr + G.MB.REQ) or 0

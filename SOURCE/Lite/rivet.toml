@@ -1,0 +1,22 @@
+# rivet_hook config for the Rift Apart Randomizer LITE (rivet_hook 2.0.x). Keys not listed use
+# defaults; on exit rivet_hook rewrites this file with every setting and comment (that is fine).
+# Lite loads NO extra DLL and talks to NO companion: only the Lua scripts in the scripts folder run.
+
+[overlay]
+enabled = true          # REQUIRED: rivet_hook only finds the hero and forwards key presses with
+                        # the overlay on. Its window stays hidden until F3.
+
+[scripts]
+enabled = true
+path = "scripts"
+reload_key = 19         # Pause key (F6 was too easy to press by accident)
+
+[bridge]
+enabled = false         # Lite has no companion (the full release uses this pipe to save progress)
+
+[log]
+paths = false           # this "paths" is an on/off switch, not a list
+
+[renderdoc]
+# Not RenderDoc: rivet_hook's setting that loads an extra DLL. Lite loads none.
+enabled = false

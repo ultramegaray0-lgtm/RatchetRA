@@ -9,7 +9,7 @@
 --   missions    = { ["<MissionName from MissionCompleteEvent>"] = "planet:savali" },
 --   bolts       = { ["<BoltName from GainGoldBoltEvent>"]       = "goldbolt:10" },
 --   checkpoints = { ["<DestinationCheckpointName>"]             = "savali" },
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["05_rando_bindings"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["05_rando_bindings"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 RANDO_BINDINGS = {
   -- PlanetChangedEvent.NewPlanetName -> planet id, for names observed after the model was frozen
   -- (adding them to the model would change every seed's fingerprint)
@@ -42,8 +42,17 @@ RANDO_BINDINGS = {
   -- one). A Lorb is a "Ruin token" (enum 0xECCC3486 = Lorb_01 ... Lorb_12): RuinPlayPickedUpEvent { RuinId }.
   -- The id makes one pickup pay once, whichever of the events comes. NOT seen in a rivet.log yet: the first pickup
   -- logs "RANDO-DISCOVER RYNOPlayPickedUpEvent ..." and "RANDO-COLLECTIBLE spybot <id>".
+  -- round54: "events subscribed 23/23", so these three classes exist in your game (rivet_hook marks a missing class
+  -- dead and the count would be short). v0.71-DEV1: a Lorb picked up by a script may send RuinScriptPickupEvent, as a
+  -- scripted Spybot does; it is bound too (a class the game does not have is skipped and listed at the start).
   collectible_events = {
     spybot = { classes = { "RYNOPlayPickedUpEvent", "RYNOScriptPickupEvent" }, id_field = "RynoId" },
-    lorb = { class = "RuinPlayPickedUpEvent", id_field = "RuinId" },
+    lorb = { classes = { "RuinPlayPickedUpEvent", "RuinScriptPickupEvent" }, id_field = "RuinId" },
   },
+  -- v0.71-DEV1: event classes WATCHED ONLY (logged, never paid): names a collectible pickup might send. At the start
+  -- rivet.log lists which of them your game has ("RANDO-COLLECTIBLE event classes ..."), and the first of each that
+  -- fires is logged with its fields - the evidence a binding above needs. Nothing here hands out a reward.
+  collectible_watch = { "CraiggerbearPickedUpEvent", "CraiggerBearPickedUpEvent", "CollectiblePickedUpEvent",
+                        "CollectibleCollectedEvent", "CollectibleFoundEvent", "GainCollectibleEvent",
+                        "PickupCollectedEvent", "RYNOPlanCollectedEvent", "RuinTokenCollectedEvent" },
 }

@@ -88,7 +88,7 @@
 --   * Abilities the story gives (Speetle, Trudi, ...) cannot be granted: locations needing
 --     them, and locations whose trigger is not proven (armor finds, collectibles), only ever
 --     hold non-progression rewards.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["02_rando_generator"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["02_rando_generator"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 RANDO_GEN = {}
 local G = RANDO_GEN
 G.VERSION = "10.11.0"
@@ -209,10 +209,26 @@ G.DEFAULTS = {
   -- v0.62-DEV5
   start_omega = 0,                -- random Omega versions (of the omega_weapons pool) you start with (0-20); the
                                   -- weapon itself is given with it (an Omega needs its weapon, docs/OMEGA.md)
+  -- v0.71-DEV2
+  omega_early = false,            -- TEST SETTING: the Omega versions are placed on the locations the start can reach FIRST
+                                  -- (every one of them that would give Bolts or Raritanium), so the first hour of a game
+                                  -- hands out Omegas. Needs omega_weapons. Off: seeds exactly as before
+  -- v0.71-DEV3
+  shop_bonus = true,              -- Ms. Zurkon's open weapon slots also pay a bonus when the weapon in them is bought: 2 Omega
+                                  -- versions, 2 gadgets and 2 armor pieces (locations shop:omega_1 ... shop:armor_2). They take
+                                  -- items that would otherwise sit on other locations (never an item the logic needs); a
+                                  -- bonus is never in logic. false: seeds exactly as before (the placements do not move either way)
+  -- v0.71-DEV8
+  weapon_xp = false,              -- weapon XP joins the rewards: weapon_xp_percent of the locations that would give Bolts or
+                                  -- Raritanium give weapon XP instead ("filler:xp:<amount>"); the runtime gives it to an Omega
+                                  -- weapon first (17_rando_omega.lua). false: seeds exactly as before
+  weapon_xp_percent = 25,         -- % of the currency locations that give weapon XP
+  weapon_xp_min = 2000, weapon_xp_max = 20000,   -- XP per reward (grows with the story when currency_scaling)
 }
 -- dev 10.15: settings added after 10.13 that are left out of the fingerprint while they have their
 -- default value, so every seed made without them is the same seed as before (same placements)
-G.FINGERPRINT_SINCE_10_15 = { omega_weapons = false, start_omega = 0 }   -- v0.62-DEV5: start_omega
+G.FINGERPRINT_SINCE_10_15 = { omega_weapons = false, start_omega = 0, omega_early = false, shop_bonus = false,
+                               weapon_xp = false, weapon_xp_percent = 25, weapon_xp_min = 2000, weapon_xp_max = 20000 }   -- v0.71-DEV8   -- v0.62-DEV5: start_omega; v0.71-DEV2: omega_early
 -- items every seed starts with, whatever the settings say
 G.ALWAYS_START = { "hoverboots", "map_o_matic" }
 -- weapons the game itself hands out whatever happens and that are never rewards. 10.1: none (the
@@ -262,7 +278,8 @@ G.RANGES = { start_weapons = { 0, 4 }, start_gadgets = { 0, 2 },
              raritanium_min = { 1, 5000 }, raritanium_max = { 1, 5000 },
              bolts_budget = { 0, 5000000 }, raritanium_budget = { 0, 500000 }, bolts_percent = { 0, 100 },
              start_bolts = { 0, 100000 }, start_raritanium = { 0, 5000 },
-             shop_weapons = { 0, 15 }, early_weapons = { 0, 6 }, start_omega = { 0, 20 } }
+             shop_weapons = { 0, 15 }, early_weapons = { 0, 6 }, start_omega = { 0, 20 },
+             weapon_xp_percent = { 0, 100 }, weapon_xp_min = { 1, 1000000 }, weapon_xp_max = { 1, 1000000 } }   -- v0.71-DEV8
 G.PRESETS = {
   -- 7.0 presets (9.0: the 8.0 hub presets are gone, G.RETIRED_PRESETS)
   -- balanced: every item system, the game's own level order, moderate currency, weapon prices
@@ -391,7 +408,7 @@ function G.normalize(user, preset)
     end
   end
   -- ranges given the wrong way round
-  for _, pair in ipairs({ { "bolts_min", "bolts_max" }, { "raritanium_min", "raritanium_max" },
+  for _, pair in ipairs({ { "bolts_min", "bolts_max" }, { "raritanium_min", "raritanium_max" }, { "weapon_xp_min", "weapon_xp_max" },
                           { "shop_price_percent", "shop_price_max_percent" } }) do
     local lo, hi = pair[1], pair[2]
     if s[lo] > s[hi] then
@@ -501,6 +518,7 @@ function G.location_pool(s)
       or (loc.kind == "side" and s.side_locations)
       or (loc.kind == "armor_source" and s.armor)
       or (loc.kind == "collectible" and s.collectibles and G.COLLECTIBLE_LOCATIONS[loc.collectible] == true)
+      or (loc.kind == "shop" and s.shop_bonus == true)
     if use then
       local reqs, in_logic = {}, loc.progression
       for _, r in ipairs(loc.requires or {}) do
@@ -558,6 +576,9 @@ end
 function G.filler_key(kind, amount)
   return "filler:" .. kind .. ":" .. tostring(math.tointeger(amount) or amount)
 end
+-- v0.71-DEV8: weapon XP is a filler kind of its own ("filler:xp:5000"); never a currency (G.filler_kinds)
+DB.filler = DB.filler or {}
+DB.filler.xp = DB.filler.xp or { name = "weapon XP" }
 function G.parse_filler(key)
   if type(key) ~= "string" then return nil end
   local kind, n = key:match("^filler:([%w_]+):(%d+)$")
@@ -653,6 +674,33 @@ function G.currency_amounts(s, lids, rng)
     end
   end
   return out, totals, notes
+end
+
+-- v0.71-DEV8 WEAPON XP: weapon_xp_percent of the currency locations (in their fixed order, own random stream) give weapon XP;
+-- amounts as for currency (scaled with the story when currency_scaling, rounded to 100). Returns lid -> key, the rest, total.
+function G.xp_split(s, lids, rng)
+  local out, rest, total = {}, {}, 0
+  if not s.weapon_xp then return out, lids, 0 end
+  local lo, hi = s.weapon_xp_min, s.weapon_xp_max
+  for _, lid in ipairs(lids) do
+    if rng.below(100) < s.weapon_xp_percent then
+      local v
+      if s.currency_scaling then
+        local centre = lo + (hi - lo) * G.location_progress(lid)
+        local spread = (hi - lo) * 0.25
+        local a, b = math.max(lo, centre - spread), math.min(hi, centre + spread)
+        v = a + (b - a) * (rng.below(1000001) / 1000000)
+      else
+        v = lo + (hi - lo) * (rng.below(1000001) / 1000000)
+      end
+      v = clamp_round(v, lo, hi, hi >= 1000 and 100 or 1)
+      out[lid] = G.filler_key("xp", v)
+      total = total + v
+    else
+      rest[#rest + 1] = lid
+    end
+  end
+  return out, rest, total
 end
 
 -- 6.0 the weapon pool: weapons that may be sold in a vendor slot, start, or be a reward
@@ -953,6 +1001,15 @@ local function attempt(seed_text, s, fp, n, yield)
     s._campaign = vanilla_camp
   end
   local pool = G.location_pool(s)
+  -- v0.71-DEV3: the shop bonus locations are filled by their own pass (below), never by the ordinary fill
+  local shop_locs = {}
+  do
+    local keep = {}
+    for _, loc in ipairs(pool) do
+      if loc.kind == "shop" then shop_locs[#shop_locs + 1] = loc else keep[#keep + 1] = loc end
+    end
+    pool = keep
+  end
   local gating = gating_gadgets(s)
   local items, ex = G.item_pool(s, gating)
   local registry = {}                  -- item -> route
@@ -1087,9 +1144,19 @@ local function attempt(seed_text, s, fp, n, yield)
     rng.shuffle(cands)
     local sellers = {}
     for j = 1, open_n do sellers[j] = cands[j] end
+    -- v0.71-DEV4: the OPEN slots are the earliest ones of the vendor's own order (rivet.log TABLE of round 56: enforcer,
+    -- mr_fungi, negatron, topiary, ricochet, lightning_rod, drillhound, void_repulser, glove, buzz, cold_snap, bombardier,
+    -- warmonger, blackhole, headhunter). Round 56 had them at random and, early in the game, only 1-2 slots had unlocked
+    -- while the closed ones (they sell the Burst Pistol, see 12_rando_shop.lua) filled the screen. Closed slots are now the
+    -- late ones.
+    local ORDER = { "weapon:enforcer", "weapon:mr_fungi", "weapon:negatron_collider", "weapon:topiary_sprinkler", "weapon:ricochet",
+                    "weapon:lightning_rod", "weapon:drillhound", "weapon:void_repulser", "weapon:glove_of_doom", "weapon:buzz_blades",
+                    "weapon:cold_snap", "weapon:bombardier", "weapon:warmonger", "weapon:blackhole_storm", "weapon:headhunter" }
+    local rank = {}
+    for i, k in ipairs(ORDER) do rank[k] = i end
     local open = {}
     for _, k in ipairs(free) do open[#open + 1] = k end
-    rng.shuffle(open)
+    table.sort(open, function(a, b) local ra, rb = rank[a] or 99, rank[b] or 99; if ra ~= rb then return ra < rb end; return a < b end)
     for j = #open, open_n + 1, -1 do closed[#closed + 1] = open[j]; open[j] = nil end
     table.sort(open)
     -- a derangement when one exists (a slot selling its own weapon is avoided)
@@ -1468,6 +1535,15 @@ local function attempt(seed_text, s, fp, n, yield)
     G.stable_sort(spots, function(a, b)
       return (KIND_RANK[DB.locations[a].kind] or 9) < (KIND_RANK[DB.locations[b].kind] or 9)
     end)
+    -- v0.71-DEV2 omega_early: the spots the start alone can reach come first (the order inside each group is the one
+    -- above), so the first Omega versions land on the first rewards of the game. Nothing else moves.
+    local early_omega_spots = 0
+    if s.omega_early then
+      local reach = {}
+      for _, lid in ipairs(G.solve(s, pool, {}, start, nil).spheres[1] or {}) do reach[lid] = true end
+      for _, lid in ipairs(spots) do if reach[lid] then early_omega_spots = early_omega_spots + 1 end end
+      G.stable_sort(spots, function(a, b) return (reach[a] and 0 or 1) < (reach[b] and 0 or 1) end)
+    end
     orng.shuffle(list)
     local placed = 0
     for i, key in ipairs(list) do
@@ -1477,6 +1553,87 @@ local function attempt(seed_text, s, fp, n, yield)
     if placed < #list then
       notes[#notes + 1] = string.format("omega_weapons: only %d of %d Omega versions found a location (the rest are not in this seed)", placed, #list)
     end
+    if s.omega_early then
+      notes[#notes + 1] = string.format("omega_early: %d of the %d early locations that would give Bolts or Raritanium hold an Omega version (Gold Bolts, Spybots, Lorbs and the early weapons keep their items)",
+                                         math.min(early_omega_spots, placed), early_omega_spots)
+    end
+  end
+  -- v0.71-DEV3 SHOP BONUS. Ms. Zurkon's open slots (the ones that sell a weapon) can pay a bonus when the weapon in them is
+  -- bought: 2 Omega versions, 2 gadgets, 2 armor pieces, each in a different slot. The vendor screen can only list
+  -- weapons, so the bonus rides on the weapon's purchase (PurchaseWeaponEvent). The items are TAKEN from the locations
+  -- the fill gave them (that location then gives currency) - never an item the logic needs (a gadget some location
+  -- requires), never from a Gold Bolt that would be left empty (then an armor piece from elsewhere takes its place).
+  -- Own random stream, run after every other placement: nothing else moves except those few locations.
+  local shop_bonus, shop_filled = nil, {}
+  if s.shop_bonus and #shop_locs > 0 then
+    local brng = G.rng(G.fnv1a(fp .. "#shopbonus#" .. n))
+    local open = {}
+    for _, k in ipairs(slots) do if shop_slots[k] then open[#open + 1] = k end end
+    brng.shuffle(open)
+    local by_class = {}
+    for _, loc in ipairs(shop_locs) do
+      local c = DB.locations[loc.id].shop_class
+      by_class[c] = by_class[c] or {}
+      table.insert(by_class[c], loc.id)
+    end
+    local used = {}
+    local function bolt_ok(lid) return DB.locations[lid].kind ~= "goldbolt" or s.distribution == "spread" end
+    local function movable(lid, class)
+      local key = placement[lid]
+      return key and not used[lid] and category(key) == class and not (class == "gadget" and gating[key])
+    end
+    local function take_one(class)
+      local cands = {}
+      for _, loc in ipairs(pool) do
+        if movable(loc.id, class) and bolt_ok(loc.id) then cands[#cands + 1] = { lid = loc.id } end
+      end
+      if #cands == 0 and class == "gadget" then
+        -- every movable gadget sits on a Gold Bolt that must keep a grantable item: an armor piece from elsewhere replaces it
+        for _, loc in ipairs(pool) do
+          if movable(loc.id, class) then
+            local swaps = {}
+            for _, other in ipairs(pool) do
+              local k2 = placement[other.id]
+              if k2 and not used[other.id] and other.id ~= loc.id and category(k2) == "armor" and bolt_ok(other.id)
+                 and DB.locations[other.id].holds ~= "filler" then swaps[#swaps + 1] = other.id end
+            end
+            if #swaps > 0 then cands[#cands + 1] = { lid = loc.id, swap = brng.pick(swaps) } end
+          end
+        end
+      end
+      if #cands == 0 then return nil end
+      local pick = brng.pick(cands)
+      local key = placement[pick.lid]
+      used[pick.lid] = true
+      if pick.swap then
+        placement[pick.lid] = placement[pick.swap]
+        used[pick.swap] = true; placement[pick.swap] = nil
+      else
+        placement[pick.lid] = nil
+      end
+      return key
+    end
+    shop_bonus = {}
+    local si = 1
+    for _, class in ipairs({ "omega", "gadget", "armor" }) do
+      local want = by_class[class] or {}
+      table.sort(want)
+      for _, shop_lid in ipairs(want) do
+        local slot = open[si]
+        local key = slot and take_one(class)
+        if key then
+          placement[shop_lid] = key
+          shop_bonus[slot] = shop_lid
+          shop_filled[#shop_filled + 1] = shop_lid
+          si = si + 1
+        else
+          notes[#notes + 1] = string.format("shop_bonus: no %s left for %s (%s)", class, shop_lid,
+            slot and "nothing of that kind can move without breaking the logic" or "no open weapon slot left")
+        end
+      end
+    end
+    notes[#notes + 1] = string.format("shop_bonus: %d of %d bonus locations filled, in %d of Ms. Zurkon's %d open weapon slots",
+                                       #shop_filled, #shop_locs, #shop_filled, #open)
   end
   -- 7.0 currency: every other location gives Bolts or Raritanium, each its own amount (none
   -- with bolts = false and raritanium = false). Its own random stream: currency never moves items.
@@ -1484,8 +1641,13 @@ local function attempt(seed_text, s, fp, n, yield)
   for _, loc in ipairs(pool) do
     if not placement[loc.id] and (loc.kind ~= "goldbolt" or s.distribution == "spread") then cur_lids[#cur_lids + 1] = loc.id end
   end
+  -- v0.71-DEV8: weapon XP first (its own stream), the rest is currency as before
+  local xp_at, xp_total
+  xp_at, cur_lids, xp_total = G.xp_split(s, cur_lids, G.rng(G.fnv1a(fp .. "#weapon_xp#" .. n)))
+  for lid, key in pairs(xp_at) do placement[lid] = key end
   local amounts, totals, cnotes = G.currency_amounts(s, cur_lids, G.rng(G.fnv1a(fp .. "#currency#" .. n)))
   for lid, key in pairs(amounts) do placement[lid] = key end
+  totals.xp = s.weapon_xp and xp_total or nil
   for _, m in ipairs(cnotes) do notes[#notes + 1] = m end
   for key in pairs(ex) do if DB.items[key] and not registry[key] then registry[key] = "excluded (setting)" end end
   for _, g in ipairs(G.ALWAYS_START) do registry[g] = "start (always)" end
@@ -1526,7 +1688,12 @@ local function attempt(seed_text, s, fp, n, yield)
       if not (placement[lid] and G.bolt_worthy(placement[lid])) then return nil, "Gold Bolt without a grantable item: " .. lid end
     end
   end
+  -- v0.71-DEV3: the filled bonus locations join the seed after everything was verified (they are never in logic)
+  for _, lid in ipairs(shop_filled) do
+    pool[#pool + 1] = { id = lid, kind = "shop", planet = nil, requires = {}, in_logic = false, filler_only = false }
+  end
   return {
+    shop_bonus = shop_bonus,
     pool = pool, placement = placement, registry = registry, start = start,
     solve = res, attempt = n, campaign = corder, shop_slots = s._shop_slots, start_short = s._start_short,
     shop_prices = s._shop_prices, currency_totals = totals, notes = notes,
@@ -1679,9 +1846,11 @@ function G.package(seed_text, s, preset, fp, r, warnings, requested)
     planet_locks = s.planet_locks, travel_lock = s.travel_lock == true, levels = levels,
     -- 6.0: vendor slot -> weapon it sells; 7.0: vendor slot -> price (nil: the game's prices)
     shop = { mode = (s.weapons and s.shop) or "vanilla", slots = r.shop_slots, prices = r.shop_prices,
-             price_mode = s.shop_prices, closed = r.shop_closed or {} },
+             price_mode = s.shop_prices, closed = r.shop_closed or {},
+             bonus = r.shop_bonus or {} },       -- v0.71-DEV3: vendor slot (named by its normal weapon) -> bonus location
     armor = s.armor,
     filler = { kinds = G.filler_kinds(s), bolts = { s.bolts_min, s.bolts_max }, raritanium = { s.raritanium_min, s.raritanium_max },
+               xp = s.weapon_xp and { s.weapon_xp_min, s.weapon_xp_max } or nil,       -- v0.71-DEV8
                totals = r.currency_totals },
     campaign = (r.campaign and { mode = s.campaign_mode, order = r.campaign, start = r.campaign[1],
                                  needs = RANDO_CAMPAIGN.NEEDS[s.campaign_mode] })
@@ -1713,7 +1882,15 @@ function G.audit(seed)
     local loc = DB.locations[lid]
     local kind = loc and loc.kind
     local fk, amount = G.parse_filler(it)
-    if fk then
+    if fk == "xp" then
+      -- v0.71-DEV8: weapon XP, only with weapon_xp, inside its range, never on a Gold Bolt that must hold an item
+      if not s.weapon_xp then bad(lid .. " holds " .. it .. " but weapon_xp = false")
+      elseif amount < s.weapon_xp_min or amount > s.weapon_xp_max then
+        bad(string.format("%s gives %d weapon XP, outside %d-%d", lid, amount, s.weapon_xp_min, s.weapon_xp_max))
+      end
+      if kind == "goldbolt" and s.distribution ~= "spread" then bad(lid .. " holds weapon XP") end
+      ctotal.xp = (ctotal.xp or 0) + amount
+    elseif fk then
       -- currency repeats; only the currencies switched on, inside the range (10.0: a Gold Bolt may
       -- give currency with distribution = "spread")
       if kind == "goldbolt" and s.distribution ~= "spread" then bad(lid .. " holds currency") end
@@ -1904,6 +2081,26 @@ function G.audit(seed)
   for _, w in pairs(seed.shop.slots or {}) do
     if DB.items[w] and DB.items[w].category == "omega" then bad("a vendor slot sells " .. w) end
   end
+  -- v0.71-DEV3 shop bonus: each bonus location rides on one open slot, holds the item class it is named for, and is never
+  -- an item the logic needs
+  local bonus_of_lid = {}
+  for slot, lid in pairs((seed.shop and seed.shop.bonus) or {}) do
+    if bonus_of_lid[lid] then bad(lid .. " is the bonus of two slots") end
+    bonus_of_lid[lid] = slot
+    if not s.shop_bonus then bad(lid .. " is a shop bonus although shop_bonus = false") end
+    if not (seed.shop.slots and seed.shop.slots[slot]) then bad(lid .. " rides on the slot of " .. tostring(slot) .. ", which sells nothing") end
+    local loc = DB.locations[lid]
+    if not (loc and loc.kind == "shop") then bad(tostring(lid) .. " is not a shop bonus location")
+    else
+      local it = seed.locations[lid] and seed.locations[lid].item
+      if not it then bad(lid .. " is a shop bonus without an item")
+      elseif category(it) ~= loc.shop_class then bad(lid .. " holds " .. it .. ", not a " .. loc.shop_class)
+      elseif loc.shop_class == "gadget" and gating_gadgets(s)[it] then bad(lid .. " holds " .. it .. ", a gadget the logic needs") end
+    end
+  end
+  for lid in pairs(seed.locations) do
+    if DB.locations[lid] and DB.locations[lid].kind == "shop" and not bonus_of_lid[lid] then bad(lid .. " is a shop bonus location that no slot pays") end
+  end
   for _, key in ipairs(sorted_keys(seed.registry)) do
     local route = seed.registry[key]
     if route == "location" and not (seen[key] and seen[key] ~= "start") then bad(key .. " registered at a location but not placed") end
@@ -2079,6 +2276,15 @@ function G.spoiler(seed)
                         p and string.format("%d Bolts", p) or string.format("(%s Bolts)", tostring(DB.items[k].price or "?"))))
       end
     end
+    if seed.shop.bonus and next(seed.shop.bonus) then
+      w("  SHOP BONUS (shop_bonus): buying the weapon in these slots ALSO gives the item listed (the vendor screen cannot show it):")
+      for _, k in ipairs(G.vendor_weapons()) do
+        local lid = seed.shop.bonus[k]
+        if lid then
+          w(string.format("    the slot of %-22s (%s) + %s", names(k), names(seed.shop.slots[k]), names(seed.locations[lid].item)))
+        end
+      end
+    end
     w("  Shatterbomb and RYNO 8 are rewards (listed below): their own vendor slots are closed; ammo and upgrades as usual")
     w("  No weapon is both sold and given: a weapon at the start or at a location is never in a shop slot,")
     w("  and a slot of another vendor (ARSENAL_RESTORED's) selling such a weapon is closed by the runtime")
@@ -2110,6 +2316,10 @@ function G.spoiler(seed)
       w(string.format("  %-10s %d-%d per reward, %d in all", k, f[k][1], f[k][2], (f.totals or {})[k] or 0))
     end
   end
+  if seed.filler and seed.filler.xp then                                     -- v0.71-DEV8
+    w(string.format("WEAPON XP: %d-%d per reward, %d in all (an Omega weapon gets it first)", seed.filler.xp[1], seed.filler.xp[2],
+                    (seed.filler.totals or {}).xp or 0))
+  end
   w("")
   w("LOCATIONS")
   local by_planet = {}
@@ -2124,14 +2334,15 @@ function G.spoiler(seed)
   plist[#plist + 1] = "~anywhere"
   for _, pid in ipairs(plist) do
     if by_planet[pid] then
-      local pname = pid == "~anywhere" and "Anywhere (armor sources and Spybots)" or DB.locations["planet:" .. pid] and (DB.planets[planet_index(pid)].name)
+      local pname = pid == "~anywhere" and "Anywhere (armor sources, Spybots, Lorbs and the shop bonus)" or DB.locations["planet:" .. pid] and (DB.planets[planet_index(pid)].name)
       w("  ", pname)
       for _, lid in ipairs(by_planet[pid]) do
         local l = seed.locations[lid]
         local kind = DB.locations[lid].kind
         w(string.format("    %-22s %-44s %s%s", lid, DB.locations[lid].name, names(l.item or "-"),
                         (l.in_logic or kind == "armor_source") and ""
-                        or kind == "collectible" and "  [out of logic: pays once its pickup event is bound]" or "  [out of logic]"))
+                        or kind == "collectible" and "  [out of logic: pays once its pickup event is bound]"
+                        or kind == "shop" and "  [paid when the weapon in its shop slot is bought]" or "  [out of logic]"))
       end
     end
   end

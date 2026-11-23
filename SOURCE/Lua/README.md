@@ -1,4 +1,4 @@
-# Lua scripts: v0.70
+# Lua scripts: v0.75
 
 These 16 files go into `<game folder>\scripts`. rivet_hook loads them in name order.
 
@@ -19,6 +19,9 @@ These 16 files go into `<game folder>\scripts`. rivet_hook loads them in name or
 | `15_rando_hub.lua` | **optional**: planet shuffle (the Nefarious City hub) and the trip back after each planet |
 | `16_rando_spawners.lua` | **optional**: the spawner layer of the Enemy Randomizer |
 | `enemy.lua` | **optional**: the Enemy Randomizer (the - key) |
-| `17_rando_omega.lua` | **optional**: Omega weapons in the game (`omega_weapons`, off by default) |
+| `17_rando_omega.lua` | **optional**: Omega weapons in the game (`omega_weapons`, on by default since v0.75) |
 
 Files 07 and 08 do not exist in a release: those numbers belonged to developer tools.
+
+The Lite package (no DLL, no companion) uses 13 of these: every file except `16_rando_spawners.lua`, `enemy.lua` and
+`17_rando_omega.lua`, with its own `04_rando_settings.lua` from [`SOURCE/Lite`](../Lite).

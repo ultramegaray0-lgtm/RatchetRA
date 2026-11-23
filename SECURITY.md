@@ -1,7 +1,7 @@
-# Security and privacy: v0.70
+# Security and privacy: v0.75
 
-This page says what each part of the mod does, based on a review of the v0.70 source and player
-ZIP. It is not a certification by a third party: please check the source yourself if in doubt.
+This page says what each part of the mod does, based on a review of the v0.75 source and the two
+ZIPs (full and Lite). It is not a certification by a third party: please check the source yourself if in doubt.
 
 ## Summary
 
@@ -38,6 +38,12 @@ ZIP. It is not a certification by a third party: please check the source yoursel
 - Some antivirus programs flag DLLs that hook a running game. Check the source and checksum if you
   are unsure.
 
+## The Lite ZIP
+
+The Lite download contains only Lua scripts, `rivet.toml` and documentation: no DLL, no companion, no `.bat` or
+`.ps1`. Its `rivet.toml` loads no extra DLL (`[renderdoc] enabled = false`) and keeps rivet_hook's pipe bridge off
+(`[bridge] enabled = false`). The scripts do what the table above says for Lua scripts.
+
 ## Things to know
 
 - **rivet_hook's pipe bridge** (`[bridge] enabled = true`) lets programs on your own PC that run
@@ -50,7 +56,7 @@ ZIP. It is not a certification by a third party: please check the source yoursel
 
 ## Review of the release
 
-For v0.70 the player ZIP and this repository were checked for: personal names, user folders and
+For v0.75 the player ZIP and this repository were checked for: personal names, user folders and
 absolute paths; keys, tokens and passwords; network, download and process-launch code; registry
 access; files written outside the game folder; developer tools and debug keys; the developer-only
 randomizers (they stay in the private development repository). None were found in the files

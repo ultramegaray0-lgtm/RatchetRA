@@ -1,4 +1,4 @@
-# rivet.toml: v0.70
+# rivet.toml: v0.75
 
 rivet_hook's configuration for the randomizer. Goes next to `RiftApart.exe`. It turns on what
 the randomizer needs: `[scripts]`, `[overlay]`, `[bridge]` and `[renderdoc]` (rivet_hook's only

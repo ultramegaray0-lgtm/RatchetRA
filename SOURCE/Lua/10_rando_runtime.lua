@@ -37,12 +37,12 @@
 --      and planet rewards wait for that planet's Coordinates.
 -- Engine calls are wrapped in pcall; errors are logged as RANDO-ERROR and never switch the
 -- randomizer off.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["10_rando_runtime"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["10_rando_runtime"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 
 RANDO = RANDO or {}
 local R = RANDO
-R.KIT_VERSION = "10.0.35"
-R.RELEASE = "v0.70"                  -- the public release this kit belongs to (the start banner)
+R.KIT_VERSION = "10.0.39"
+R.RELEASE = "v0.75"                  -- the public release this kit belongs to (the start banner)
 local DB = RANDO_DATA
 local GEN = RANDO_GEN
 local BIND = RANDO_BINDINGS or {}
@@ -103,6 +103,10 @@ function R.update_loading(dt)
     if RANDO_OMEGA and RANDO_OMEGA.on_loading then
       local ok, err = pcall(RANDO_OMEGA.on_loading)
       if not ok then log("RANDO-ERROR omega on_loading:", tostring(err)) end
+    end
+    if RANDO_SHOP and RANDO_SHOP.on_loading then             -- v0.71-DEV1
+      local ok, err = pcall(RANDO_SHOP.on_loading)
+      if not ok then log("RANDO-ERROR shop on_loading:", tostring(err)) end
     end
   elseif R.loading then
     if R.loads_seen <= 40 then log(string.format("RANDO-LOAD the load is over (%d frame(s))", R.load_frames)) end
@@ -170,7 +174,17 @@ R.config = {
   armor_intercept = true,            -- armor sources give the seed's item instead of their own piece
   shop_runtime = true,               -- apply the seed's shop shuffle to the vendor in memory
   shop_close_slots = true,           -- closed vendor slots show the Burst Pistol (false: their own weapon)
-  levels_runtime = true,             -- locked travel sends you back from a locked planet (false: rewards wait)
+  shop_show_items = "notify",        -- v0.71-DEV5: "notify" = the shop bonuses (Omega, gadget, armor) ride on the weapon bought, announced on
+                                     -- screen and in rivet.log | "try" = ALSO write each gadget / armor bonus into a closed vendor slot by its
+                                     -- own item id so the vendor screen lists it (UNTESTED: the screen may not accept a non-weapon) | "off"
+  shop_note_when = "vendor",         -- v0.71-DEV7: when the bonus notes (one short message per bonus) show: "vendor" = when you talk to Ms. Zurkon
+                                     -- (and after a purchase if the game never reports the vendor opening) | "load" = a while into each of the
+                                     -- first loads | "both"
+  shop_rename = "off",               -- v0.71-DEV7: her screen: a bonus slot's weapon DESCRIPTION ("desc") or NAME ("name") is replaced by the
+                                     -- bonus item's text | "probe" = only log the config fields (RANDO-SHOP RENAME-PROBE) | "off"
+  shop_pay_owned = true,             -- v0.71-DEV9: a bonus slot selling a weapon you already own cannot be bought: its bonus is given
+                                     -- directly once the weapon reads as yours (12_rando_shop.lua H.owned_tick) | false: waits for a purchase
+  levels_runtime = true,            -- locked travel sends you back from a locked planet (false: rewards wait)
   restore_inventory = true,          -- after the hub's own trips, give items back when the load lost most of them
   key_shuffle = "0",                 -- the one player key: planet shuffle on/off, Ctrl+0 twice gives items back
   -- the hub (15_rando_hub.lua; hub seeds only)
@@ -217,8 +231,11 @@ R.config = {
   -- watched - for developer test rounds; "any": the 10.29 rules, NOT safe (simulator tests of the scheduling)
   -- dev 10.31: "all" (this dev kit's default): every regular enemy can replace every other; only pairs the game showed
   -- cannot be killed stay out. enemy_mix_movement = true mixes walkers / flyers / turrets in "all" (dev 10.32: off).
+  -- v0.71-DEV8: "max" (this dev kit's default): "all" plus walkers / flyers / turrets mixed, no pair rejected by earlier
+  -- evidence, the combat watch logs only (16_rando_spawners.lua V.max_mode). The 5-retry safety net stays.
+  -- v0.75: the code default is "all" again (the player's release; the dev settings file asks for "max" itself)
   enemy_compat = "all",
-  enemy_mix_movement = false,        -- dev 10.32: OFF (round42: walkers at flyer spawns could not be killed)
+  enemy_mix_movement = false,        -- v0.75: OFF by default again (DEV8's dev settings turn it on for "max")
   -- dev 10.13: chaos.lua. OFF by default; NO safety guards (docs/CHAOS.md); while ON the two above pause
   chaos_randomizer = false,          -- anything can become anything (the start of a save that never used its key)
   key_chaos = "BACKSPACE",           -- Chaos Randomizer on/off (Ctrl: what it changed here)
@@ -227,12 +244,31 @@ R.config = {
   omega_runtime = true,              -- false: Omega rewards are only recorded, the game's flag is never written
   omega_flag_offset = -1,            -- developer override: the Omega flag's byte offset after the weapon's item id
                                      -- in its inventory record (1-1024); -1 = learned in the game (docs/OMEGA.md)
+  -- v0.71-DEV2: TEST. Every weapon reward arrives as its Omega version (the weapon, then its flag) until you hold this
+  -- many Omega weapons (0 = off). Covers Gold Bolts, pods, missions and the start - the places the generator's
+  -- omega_early cannot use. Needs omega_weapons in the seed. Never used by a public release
+  omega_test = 0,
+  -- v0.71-DEV8: which weapon a weapon XP reward goes to: "smart" = an Omega weapon you hold first (the least XP), else the
+  -- weapon you hold with the least XP | "lowest" = the weapon you hold with the least XP
+  weapon_xp_target = "smart",
   -- developer keys and test travel: only used by the dev(*).lua files
   key_status = ";", key_campaign = "'", key_hub = "]", key_hub_return = "[", key_story = "/",
   key_test_travel = ".", key_test_point = ",", legacy_f_keys = true, test_travel = false,
+  key_spybot = "F2", key_lorb = "F3",   -- v0.71-DEV1 (dev(keys).lua): status; Ctrl+key twice pays a pickup by hand
+  key_shop = "\\",                      -- v0.71-DEV3 (dev(debug).lua): the shop's slots and bonuses; Ctrl+key twice pays the next bonus by hand
+  -- v0.75 LITE: the NexusMods test package (tools/build_lite_release.py) - Lua scripts only, no companion, no rando_give.dll
+  lite = false,                      -- true: start at once without waiting for the companion, a fixed seed, no planet shuffle
+  bank_rewards = true,               -- false: a reward never waits for its planet's Coordinates (Lite: nothing is saved, so a
+                                     -- banked reward would be lost when the game closes)
+  spoiler_log = false,               -- true: the seed's spoiler is written into rivet.log (RANDO-SPOILER lines; Lite has no
+                                     -- companion to write the spoiler file)
+  currency_by_node = true,           -- without the helper, Bolts / Raritanium go through a game node on Nefarious City
 }
 R.CHOICES = { hub_trigger = { parade = true, wrench = true, cinematic = true }, hub_levels = { all = true, off = true },
-              hub_prologue = { ["end"] = true, keep = true }, hub_prologue_timing = { before = true, after = true } }
+              hub_prologue = { ["end"] = true, keep = true }, hub_prologue_timing = { before = true, after = true },
+              shop_show_items = { notify = true, try = true, off = true },
+              shop_note_when = { vendor = true, load = true, both = true }, shop_rename = { desc = true, name = true, probe = true, off = true },
+              weapon_xp_target = { smart = true, lowest = true } }   -- v0.71-DEV8
 -- options of older kits: a settings file that still has one gets a note in rivet.log
 local RETIRED_RUNTIME = {
   key_shop_next = "is not used since 4.0", key_shop_buy = "is not used since 4.0",
@@ -246,7 +282,7 @@ local RETIRED_RUNTIME = {
 local SETTINGS = RANDO_SETTINGS or {}
 local KEY_SETTINGS = { key_status = true, key_campaign = true, key_test_travel = true, key_test_point = true,
                        key_hub = true, key_hub_return = true, key_story = true, key_shuffle = true,
-                       key_enemies = true, key_bosses = true, key_chaos = true }
+                       key_enemies = true, key_bosses = true, key_chaos = true, key_spybot = true, key_lorb = true, key_shop = true }
 local GEN_OPTIONS = {}
 for k, v in pairs(SETTINGS) do
   if R.config[k] ~= nil then
@@ -334,7 +370,7 @@ function R.set_state(s) S = s; R.state = s end
 -- saved by the companion and kept over a New Game). While it is off the story and travel are the
 -- game's own; items stay randomized.
 function R.hub_loaded() return SEED ~= nil and SEED.hub ~= nil and RANDO_HUB ~= nil end
-function R.planet_shuffle_on() return R.hub_loaded() and S ~= nil and S.planet_shuffle == true end
+function R.planet_shuffle_on() return not R.config.lite and R.hub_loaded() and S ~= nil and S.planet_shuffle == true end
 -- the hub is running planet shuffle: switched on, and the hub has started in this run
 function R.hub_active()
   return R.planet_shuffle_on() and RANDO_HUB.started ~= nil and RANDO_HUB.started() == true
@@ -345,6 +381,7 @@ local STATE_TABLES = { "collected", "paid", "banked", "access", "inventory", "st
                        "history", "real", "real_nodes", "tracked", "gadgets_seen", "weapons", "gadgets",
                        "armor_sources", "currency_queue", "shop_given",
                        "omega", "omega_prereq",
+                       "xp_pending", "xp_done", "armor_phantom",       -- v0.71-DEV8: weapon XP rewards; armor phantoms
                        "collectible_ids" }                 -- v0.62-DEV5: Spybot / Lorb ids already paid this run           -- dev 10.15: Omega tier per weapon, prerequisites given
 local function fill_defaults(s)
   for _, k in ipairs(STATE_TABLES) do s[k] = s[k] or {} end
@@ -388,7 +425,10 @@ local function grant(key, quiet, prefix)
   if it.category == "coordinates" then
     S.access[it.planet] = true
     changed()
-    if SEED.travel_lock then
+    if R.config.lite then
+      -- v0.75 Lite: no planet shuffle and no banking - Coordinates only count for the hub's plan
+      say(prefix .. it.name .. " (it opens " .. planet_name(it.planet) .. " in the full release's planet shuffle)")
+    elseif SEED.travel_lock and (not SEED.hub or R.planet_shuffle_on()) then
       say(prefix .. it.name .. " - you can fly to " .. planet_name(it.planet) .. " now", { type = "center", duration = 6 })
     else
       say(prefix .. it.name .. " - mission rewards on " .. planet_name(it.planet) .. " are yours now")
@@ -403,6 +443,21 @@ local function grant(key, quiet, prefix)
   end
   -- dev 10.15: an Omega version (R.grant_omega below)
   if it.category == "omega" then R.grant_omega(key, quiet, prefix); return end
+  -- v0.71-DEV2 omega_test: a weapon reward of a weapon that has an Omega version arrives AS that Omega version, while
+  -- fewer than omega_test Omega weapons are held. The weapon reward itself is recorded too, so the weapon found at its
+  -- real place later adds nothing and the Omega is kept (docs/OMEGA.md section 3)
+  if it.category == "weapon" and (tonumber(R.config.omega_test) or 0) > 0 and SEED.settings and SEED.settings.omega_weapons then
+    local w = key:sub(8)
+    local okey = "omega:" .. w
+    local n = 0
+    for _ in pairs(S.omega or {}) do n = n + 1 end
+    if DB.items[okey] and DB.items[okey].category == "omega" and not S.omega[w] and n < R.config.omega_test then
+      S.inventory[key] = true
+      history("RANDO-OMEGA-TEST " .. it.name .. " arrives as its Omega version (omega_test " .. tostring(R.config.omega_test) .. ", " .. n .. " held)")
+      grant(okey, quiet, prefix)
+      return
+    end
+  end
   if it.category == "weapon" or it.category == "gadget" or it.category == "pickup" then
     S.inventory[key] = true
     if it.category == "weapon" then S.weapons[key:sub(8)] = true end
@@ -540,8 +595,21 @@ local function pay(lid)
     local piece = loc.armor and DB.items[loc.armor]
     prefix = "Armor pod" .. (piece and (" (" .. piece.name .. ")") or "") .. ": "
   end
+  if loc.kind == "shop" then prefix = "Shop bonus: " end      -- v0.71-DEV3
   local fk, amount = GEN.parse_filler(item)
   if item and DB.items[item] then grant(item, false, prefix)
+  elseif fk == "xp" then
+    -- v0.71-DEV8: weapon XP, given by 17_rando_omega.lua to an Omega weapon you hold first (O.xp_pass)
+    S.xp_pending = S.xp_pending or {}
+    S.xp_pending[lid] = amount
+    history(string.format("received %d weapon XP (%s)", amount, lid))
+    local how = RANDO_OMEGA and RANDO_OMEGA.xp_request and RANDO_OMEGA.xp_request(lid, amount)
+    local note = (how == "queued" and "goes to an Omega weapon you hold first")
+              or (how == "waits" and "given once your weapons are found")
+              or (how == "off" and "recorded (omega_runtime = false)")
+              or "recorded (17_rando_omega.lua is not installed)"
+    say((prefix or "Randomizer: ") .. string.format("%d weapon XP - %s", amount, note), { type = "corner", duration = 4 })
+    changed()
   elseif fk then
     -- 5.0 filler: Bolts or Raritanium, given as currency items with a count
     local cur = DB.filler and DB.filler[fk] and DB.filler[fk].item
@@ -578,6 +646,7 @@ function R.collect(lid, why)
   -- its rewards pay; they wait only when the warp back was impossible or levels_runtime is off
   local waits = SEED.planet_locks and loc.planet and loc.kind ~= "goldbolt" and not S.access[loc.planet]
   if waits and SEED.travel_lock then waits = RANDO_TRAVEL ~= nil and RANDO_TRAVEL.banks(loc.planet) end
+  if waits and R.config.bank_rewards == false then waits = false end      -- v0.75 (Lite): every reward pays at once
   if waits then
     S.banked[lid] = true
     local item = loc_item(lid)
@@ -780,12 +849,46 @@ function R.on_collectible(kind, id, from_event)
     if last_collect[kind] and f - last_collect[kind] < R.COLLECT_DEBOUNCE then return end
     last_collect[kind] = f
   end
-  log("RANDO-COLLECTIBLE", kind, tostring(id or "-"))
+  if from_event then R.collectible_events_seen[kind] = (R.collectible_events_seen[kind] or 0) + 1 end
+  log("RANDO-COLLECTIBLE", kind, tostring(id or "-"), from_event and "(the game's event)" or "(by hand)")
   S.collectibles[kind] = (S.collectibles[kind] or 0) + 1
   changed()
   local n = S.collectibles[kind]
   history(kind .. " #" .. n)
   R.collect(kind .. ":" .. n, kind .. " found")
+end
+R.collectible_events_seen = R.collectible_events_seen or {}
+
+-- v0.71-DEV1: how many locations of a collectible kind this seed has (spybot:1..10, lorb:1..12)
+function R.collectible_total(kind)
+  local n = 0
+  for lid in pairs(SEED and SEED.locations or {}) do
+    if DB.locations[lid] and DB.locations[lid].kind == "collectible" and DB.locations[lid].collectible == kind then n = n + 1 end
+  end
+  return n
+end
+function R.collectible_status(kind)
+  local label = kind == "spybot" and "Spybots" or kind == "lorb" and "Lorbs" or kind
+  local total = R.collectible_total(kind)
+  if total == 0 then return label .. ": not reward locations in this seed (collectibles = false)" end
+  local got = (S and S.collectibles and S.collectibles[kind]) or 0
+  local nxt = got < total and SEED.locations[kind .. ":" .. (got + 1)]
+  local item = nxt and nxt.item
+  return string.format("%s %d/%d paid (the game's event: %d this session)%s", label, got, total,
+                       R.collectible_events_seen[kind] or 0,
+                       item and (" - next: " .. item_name(item)) or (got >= total and " - all paid" or " - next: currency"))
+end
+-- v0.71-DEV1: a pickup the game did not report (developer key, dev(keys).lua): pays the next location of that kind,
+-- never past the last one. The event route still dedupes by id, so a later event for the same pickup pays the NEXT
+-- location - use this only when rivet.log shows no RANDO-COLLECTIBLE line for a pickup you made.
+function R.claim_collectible(kind)
+  if not (SEED and S) then return false, "the seed is still being prepared" end
+  local total = R.collectible_total(kind)
+  local got = (S.collectibles and S.collectibles[kind]) or 0
+  if total == 0 then return false, "this seed has no " .. kind .. " locations (collectibles = false)" end
+  if got >= total then return false, string.format("all %d already paid", total) end
+  R.on_collectible(kind, nil, false)
+  return true
 end
 
 -- ---------------------------------------------------------------------------------------
@@ -870,7 +973,7 @@ function R.process_planet(name, old)
     RANDO_TRAVEL.on_arrival(pid, from)
     return pid
   end
-  if SEED.planet_locks and not S.access[pid] then
+  if SEED.planet_locks and not S.access[pid] and R.config.bank_rewards ~= false then
     say(string.format("%s: mission rewards here wait for its Coordinates (Gold Bolts pay at once)%s", planet_name(pid),
                       banked > 0 and string.format(" (%d waiting)", banked) or ""), { type = "corner", duration = 5 })
   end
@@ -1039,7 +1142,8 @@ end
 -- sources and finds, gadgets and the shop's one-time gift are kept.
 R.MERGE_SETS = { "collected", "paid", "banked", "bolts_seen", "story_missions", "planets_detected", "inventory",
                  "weapons", "access", "tracked", "armor_found", "armor_sources", "armor_sets_done", "gadgets_seen",
-                 "visited", "shop_given", "gadgets", "omega_prereq" }
+                 "visited", "shop_given", "gadgets", "omega_prereq",
+                 "xp_pending", "xp_done", "armor_phantom" }        -- v0.71-DEV8
 R.OMEGA_RANK = { ["pending"] = 1, ["applied"] = 2 }
 R.STATUS_RANK = { failed = 1, queued = 2, sent = 3, owned = 4, confirmed = 5 }
 function R.merge_live(live, S)
@@ -1067,6 +1171,8 @@ function R.merge_live(live, S)
     end
   end
   if added > 0 then log("RANDO-SAVE kept", added, "currency payment(s) from before the restore") end
+  -- v0.71-DEV8: a weapon XP reward already given is never given again
+  for lid in pairs(S.xp_done or {}) do if S.xp_pending then S.xp_pending[lid] = nil end end
   -- the armor baseline is measured once: a save without one takes this session's
   if S.armor_baseline == nil and type(live.armor_baseline) == "table" then S.armor_baseline = live.armor_baseline end
   -- dev 10.15: an Omega tier is never lost by a restore (the furthest status wins)
@@ -1304,6 +1410,26 @@ for _, kind in ipairs(GEN.sorted_keys(BIND.collectible_events)) do
     end)
   end
 end
+-- v0.71-DEV1: watched-only classes (05_rando_bindings.lua collectible_watch): which exist, and the first fields of each
+do
+  local have, missing = {}, {}
+  R.watch_logged = R.watch_logged or {}
+  for _, cls in ipairs(BIND.collectible_watch or {}) do
+    local ok = pcall(rivet.on_event, cls, function(ev)
+      R.watch_logged[cls] = (R.watch_logged[cls] or 0) + 1
+      if R.watch_logged[cls] > 5 then return end
+      local parts = {}
+      for k, v in pairs(ev.fields or {}) do parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) end
+      table.sort(parts)
+      log("RANDO-COLLECTIBLE watched", cls, table.concat(parts, " "))
+    end)
+    if ok then have[#have + 1] = cls else missing[#missing + 1] = cls end
+  end
+  if #have + #missing > 0 then
+    log("RANDO-COLLECTIBLE event classes watched (logged, never paid):", #have > 0 and table.concat(have, ", ") or "none",
+        "| not in this game:", #missing > 0 and table.concat(missing, ", ") or "none")
+  end
+end
 -- 10.0: checkpoints are named (14_rando_travel.lua: the engine's CRC-32 of every listed name)
 on("CheckpointTriggeredEvent", function(ev)
   local f = ev.fields or {}
@@ -1375,6 +1501,11 @@ end
 R.bind_key(R.config.key_shuffle, function()
   if not (SEED and S) then say("Randomizer: the seed is still being prepared", { type = "corner", duration = 3 }); return end
   if R.ctrl_down() then R.key_restore(); return end
+  if R.config.lite then
+    -- v0.75: planet shuffle starts missions and locks travel through rando_give.dll, which the Lite package does not have
+    say("Randomizer Lite: planet shuffle needs the full release (with rando_give.dll)", { type = "center", duration = 6 })
+    return
+  end
   if R.hub_loaded() then RANDO_HUB.key_shuffle() end
 end, "key_shuffle")
 log("RANDO-KEYS", R.keys_numeric and "keyboard keys on" or "rivet.key() does not use Windows key codes: only its own key names work",
@@ -1384,6 +1515,18 @@ log("RANDO-KEYS", R.keys_numeric and "keyboard keys on" or "rivet.key() does not
 -- (seed = "random") one from the companion
 R.WAIT_FOR_COMPANION = 600
 R.WAIT_COMPANION_START = 3600
+-- v0.75 LITE: no companion will come, so nothing is waited for (2 s: the first frames settle), and a seed is always fixed
+R.LITE_SEED = "rift-lite-test"
+R.SPOILER_PER_FRAME = 20
+if R.config.lite then
+  R.WAIT_COMPANION_START = 120
+  if rando_seed_mode() == "random" then
+    log("RANDO-LITE seed = \"random\" needs the companion (full release) - using the fixed seed", R.LITE_SEED)
+    SETTINGS.seed = R.LITE_SEED
+  end
+  log("RANDO-LITE the Lite package: Lua scripts only (no companion, no rando_give.dll) - rewards arrive on Nefarious City,"
+      .. " progress is not saved between game sessions")
+end
 if type(RANDO_SEED) == "table" and RANDO_SEED.format == 10 then
   local pre = RANDO_SEED
   seed_ready(pre)
@@ -1528,11 +1671,33 @@ local function frame(dt)
     say("Randomizer: start the companion (seed = random)", { type = "center", duration = 8 })
   end
   if not (SEED and S) then return end
+  -- v0.75 (Lite): the spoiler goes into rivet.log, a few lines a frame (no companion writes the spoiler file)
+  if R.config.spoiler_log and not R.spoiler_done then
+    if not R.spoiler_lines then
+      spoiler_cache = spoiler_cache or GEN.spoiler(SEED)
+      R.spoiler_lines, R.spoiler_at = {}, 1
+      for line in (spoiler_cache .. "\n"):gmatch("([^\n]*)\n") do R.spoiler_lines[#R.spoiler_lines + 1] = line end
+      log("RANDO-SPOILER ---- the spoiler of seed " .. tostring(SEED.seed) .. " (" .. #R.spoiler_lines .. " lines) ----")
+    else
+      local stop = math.min(#R.spoiler_lines, R.spoiler_at + R.SPOILER_PER_FRAME - 1)
+      for i = R.spoiler_at, stop do log("RANDO-SPOILER " .. R.spoiler_lines[i]) end
+      R.spoiler_at = stop + 1
+      if R.spoiler_at > #R.spoiler_lines then
+        log("RANDO-SPOILER ---- end of the spoiler ----")
+        R.spoiler_done, R.spoiler_lines = true, nil
+      end
+    end
+  end
   -- no companion: play anyway (progress is not saved), so the start items still arrive
   if not R.restored and not R.unsaved and frames >= R.WAIT_COMPANION_START and rando_seed_mode() == "fixed" then
     R.unsaved = true
-    log("RANDO-SAVE the companion did not connect - playing WITHOUT saving randomizer progress")
-    say("Randomizer: the companion is not running - progress will NOT be saved", { type = "center", duration = 8 })
+    if R.config.lite then
+      log("RANDO-SAVE Lite: no companion - randomizer progress lives in this game session only")
+      say("Randomizer Lite: seed " .. tostring(SEED.seed), { type = "center", sub = "rewards arrive on Nefarious City - progress is not saved between sessions", duration = 8 })
+    else
+      log("RANDO-SAVE the companion did not connect - playing WITHOUT saving randomizer progress")
+      say("Randomizer: the companion is not running - progress will NOT be saved", { type = "center", duration = 8 })
+    end
     if R.new_game_pending then R.new_game_pending = nil; R.reset_for_new_game("the prologue started")
     else begin() end
   end
@@ -1568,7 +1733,7 @@ local function frame(dt)
     local oka, ea = pcall(RANDO_ARMOR.tick, frames)
     if not oka then log("RANDO-ERROR armor:", tostring(ea)) end
   end
-  if ready and RANDO_SHOP then
+  if ready and not R.loading and RANDO_SHOP then           -- v0.71-DEV1: not during a load
     local okv, ev = pcall(RANDO_SHOP.tick, frames)
     if not okv then log("RANDO-ERROR shop:", tostring(ev)) end
   end

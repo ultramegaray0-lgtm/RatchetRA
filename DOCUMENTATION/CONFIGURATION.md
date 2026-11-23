@@ -1,4 +1,4 @@
-# Configuration: v0.70
+# Configuration: v0.75
 
 ## Settings file
 
@@ -19,13 +19,16 @@ written to `rivet.log` (search `RANDO-SETTINGS`) and the default is used.
 | `story_milestones` | `true` | each planet's second story mission gives a reward |
 | `side_locations` | `true` | Zurkie's cups, Trudi, the Blizar chef and Ardolis give rewards |
 | `weapons` | `true` | shuffle weapons |
-| `collectibles` | `false` | Spybots and Lorbs hold no rewards in v0.70 (their pickups are not recognized yet) |
+| `collectibles` | `true` | the 10 Spybots and 12 Lorbs give rewards when you pick them up |
 | `restored_weapons` | `"auto"` | ARSENAL_RESTORED's weapons: `"auto"` (only if installed), `false` |
 | `gadgets` | `true` | Box Breaker, Omniglove and Glitch are rewards |
 | `armor` | `true` | armor pieces are rewards |
 | `shop` | `"shuffle"` | `"shuffle"` or `"vanilla"` (her usual weapons) |
+| `shop_bonus` | `true` | six of Ms. Zurkon's open slots also give a bonus item (2 Omega versions, 2 gadgets, 2 armor pieces) when you buy the weapon there; a weapon you already own pays its bonus directly |
 | `exclude` | `""` | items never randomized, e.g. `"weapon:ryno_8,armor:pirate_head"` |
-| `omega_weapons` | `false` | `true`: the 20 Omega versions (Challenge Mode / New Game+) become rewards. Since v0.70 the Omega upgrade is set in the game. Turning it on makes a different seed ([KNOWN_ISSUES](KNOWN_ISSUES.md)) |
+| `omega_weapons` | `true` | the 20 Omega versions are rewards; the Omega upgrade is set in the game. `false`: none (a different seed) |
+| `start_omega` | `0` | 0-20 random Omega versions at the start (their weapons come with them) |
+| `weapon_xp` | `false` | `true`: about a quarter of the Bolts / Raritanium rewards give 2,000-20,000 weapon XP (not yet checked in the game) |
 | `start_weapons` | `2` | 0-4 random starting weapons |
 | `start_gadgets` | `1` | 0-2 random starting gadgets |
 | `start_items` | `""` | items you always start with, e.g. `"weapon:enforcer,glitch"` |
@@ -41,7 +44,7 @@ written to `rivet.log` (search `RANDO-SETTINGS`) and the default is used.
 | `coords_first_visit` | `true` | planet shuffle: Coordinates always open a planet's first visit |
 | `hub_auto_return` | `true` | after a planet's story you are taken back to Nefarious City (planet shuffle on **and** off) |
 | `hub_return_delay` | `12` | seconds before that trip |
-| `enemy_randomizer` | `true` | the Enemy Randomizer at the start of a save that never used the `-` key |
+| `enemy_randomizer` | `false` | the Enemy Randomizer at the start of a save that never used the `-` key |
 | `enemy_notify` | `false` | `true`: a corner note for every changed spawner's first enemy |
 | `enemy_compat` | `"all"` | `"all"`: every regular enemy loaded on the level can become every other; `"verified"`: only replacements already seen dying in the game |
 | `enemy_mix_movement` | `false` | keep walkers, flyers and turrets apart (mixing them made unkillable enemies) |
@@ -54,18 +57,19 @@ The Hoverboots and the Map-O-Matic are always part of your start.
 |---|---|
 | `0` | Planet shuffle on / off (off by default; remembered, also over a New Game) |
 | `Ctrl+0` twice | Send every randomizer item you own again (lost ones come back) |
-| `-` | Enemy Randomizer on / off (on by default; remembered) |
+| `-` | Enemy Randomizer on / off (off by default; remembered) |
 | `Ctrl+-` | What the Enemy Randomizer changed where you are |
 
 No other key does anything.
 
 ## Planet shuffle
 
-- **Off (default):** the game's normal story order with randomized items. Rewards on a planet
-  wait until you hold its Coordinates.
+- **Off (default):** the game's normal story order with randomized items. Mission rewards on a
+  planet wait until you hold its Coordinates (Gold Bolts always pay).
 - **On:** after the opening parade of a New Game, you go to Nefarious City, the hub. Planets open
   as you find their Coordinates; fly to them with the ship's planet menu. Turned on after the
-  parade, it starts with your next New Game.
+  parade, it starts with your next New Game; until then a finished planet is a plain trip back
+  (v0.75 fix: it used to start the hub in the middle of the run).
 - Needs `scripts\15_rando_hub.lua`. Without that file, `0` does nothing.
 
 ## Back to the hub (v0.60)
@@ -82,7 +86,7 @@ With planet shuffle off, the randomizer switches planetary travel on at the hub 
 has it off (so the ship can leave), and gives it back when one of Nefarious City's own stories
 starts. It never unlocks planets in the ship's menu: the game's order stays.
 
-## Enemy Randomizer (v0.60)
+## Enemy Randomizer (v0.60; off by default since v0.75)
 
 Regular enemies spawned by the level's spawners become other regular enemies **loaded on the same
 level** (walkers stay walkers, flyers flyers, turrets turrets). Bosses, story bosses, friendly bots,
@@ -95,3 +99,10 @@ shows cannot be killed is put back, and that pair is never used again in your sa
 - Random seed: `rando_companion\randomizer_saves\random_seed.txt` (delete it for a new seed).
 - Progress: `rando_companion\randomizer_saves\`.
 - Spoiler log: `rando_companion\randomizer_saves\spoilers\`.
+
+## Lite settings
+
+The Lite download's settings file has the same options, plus `lite = true`, `bank_rewards = false` (every reward pays at
+once), `spoiler_log = true` (the spoiler goes into `rivet.log`) and `shop_runtime = false`; armor, Omega, weapon XP and
+the shop bonus are off there because they need the DLL. Its seed is always fixed (`seed = "rift-lite-test"`). See
+[LITE](LITE.md).

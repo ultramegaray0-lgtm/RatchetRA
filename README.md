@@ -4,12 +4,16 @@ A randomizer for the PC version of **Ratchet & Clank: Rift Apart**. Weapons, gad
 planet Coordinates are shuffled across Gold Bolts, story missions, side activities, armor pods
 and Ms. Zurkon's shop. A solver checks every seed before you play, so it can always be finished.
 
-Unofficial fan mod. **Current version: v0.70 (beta).**
+Unofficial fan mod. **Current version: v0.75 (beta).**
 
 ## Download (players)
 
-**[Download Ratchet_Rift_Apart_Randomizer_v0.70_Player_Release.zip](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/download/v0.70/Ratchet_Rift_Apart_Randomizer_v0.70_Player_Release.zip)**
-(release page with notes and checksum: [v0.70](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/tag/v0.70)).
+**[Download Ratchet_Rift_Apart_Randomizer_v0.75_Player_Release.zip](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/download/v0.75/Ratchet_Rift_Apart_Randomizer_v0.75_Player_Release.zip)**
+(release page with notes and checksums: [v0.75](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/tag/v0.75)).
+
+**Want to try it first?** [Ratchet_Rift_Apart_Randomizer_v0.75_Lite_NexusMods.zip](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/download/v0.75/Ratchet_Rift_Apart_Randomizer_v0.75_Lite_NexusMods.zip) is the **Lite** version:
+Lua scripts only, no DLL, no companion. Weapons, gadgets, Bolts and Raritanium are randomized, and rewards arrive on
+Nefarious City. See [LITE](DOCUMENTATION/LITE.md) for what it does and what needs the full download.
 Older releases stay available on the [releases page](https://github.com/ultramegaray0-lgtm/RatchetRA/releases).
 
 The player ZIP is all you need. The files in this repository are the **source code**, for
@@ -41,18 +45,20 @@ Full steps, updating and uninstalling: [INSTALLATION](DOCUMENTATION/INSTALLATION
 - Items: weapons, gadgets (Box Breaker, Omniglove, Glitch), 21 armor pieces and planet
   Coordinates. With ARSENAL_RESTORED installed, its 9 weapons join too.
 - Reward locations: 25 Gold Bolts, story missions, side activities (Zurkie's cups, Trudi, the
-  Blizar chef, Ardolis) and armor pods. By default every Gold Bolt gives an item.
-- Ms. Zurkon sells 8 weapons from the pool; her other slots close.
-- Coordinates are items: rewards on a planet wait until you find its Coordinates.
+  Blizar chef, Ardolis), armor pods, and the 10 Spybots and 12 Lorbs. By default every Gold Bolt
+  gives an item.
+- Ms. Zurkon sells 8 weapons from the pool; her other slots close. Six of her slots also give a
+  bonus item (Omega versions, gadgets, armor) with the weapon you buy.
+- Coordinates are items: mission rewards on a planet wait until you find its Coordinates.
 - **Planet shuffle** (off by default, press **0** in game): Nefarious City becomes a hub and you
   visit planets in any order as you find their Coordinates.
 - **Back to the hub:** after each planet's story you are taken back to Nefarious City, with planet
   shuffle on **and** off (new in v0.60).
-- **Enemy Randomizer** (new in v0.60, on by default, **-** in game): regular enemies become other
-  regular enemies loaded on the same level; a replacement that cannot be killed is put back.
-- **Omega weapons** (beta, off by default): the 20 Omega versions as rewards. Since v0.70 the
-  reward really turns your weapon into its Omega version in the game.
-- **v0.70:** no more crash when you die, retry a checkpoint or load a save (see
+- **Enemy Randomizer** (off by default, **-** in game): regular enemies become other regular
+  enemies loaded on the same level; a replacement that cannot be killed is put back.
+- **Omega weapons** (on by default): the 20 Omega versions are rewards, and the reward really
+  turns your weapon into its Omega version in the game.
+- **v0.75:** new defaults, Spybots and Lorbs, the shop's bonus slots, the Lite download (see
   [RELEASE_NOTES](RELEASE_NOTES.md)).
 - **ARSENAL_RESTORED launcher:** `rando_companion\Install-ArsenalRestored.bat` installs that mod's
   rivet_hook version.
@@ -67,6 +73,7 @@ See [CONFIGURATION](DOCUMENTATION/CONFIGURATION.md).
 
 ## More
 
+- [Lite download](DOCUMENTATION/LITE.md)
 - [Troubleshooting](DOCUMENTATION/TROUBLESHOOTING.md)
 - [Known issues and compatibility](DOCUMENTATION/KNOWN_ISSUES.md)
 - [Security and privacy](SECURITY.md)
@@ -82,6 +89,7 @@ See [CONFIGURATION](DOCUMENTATION/CONFIGURATION.md).
 | `SOURCE/DLL/` | Full source of `rando_give.dll` and its reproducible build script |
 | `SOURCE/Companion/` | The companion (`Start-Companion.bat`, `RandoCompanion.ps1`) and the ARSENAL_RESTORED launcher |
 | `SOURCE/Config/` | `rivet.toml` for rivet_hook |
+| `SOURCE/Lite/` | The Lite download's settings file and `rivet.toml` (its scripts are `SOURCE/Lua`) |
 | `DOCUMENTATION/` | Player and developer documentation |
 
 Developer-only tools (test helpers, debug keys, research scripts) are kept out of this

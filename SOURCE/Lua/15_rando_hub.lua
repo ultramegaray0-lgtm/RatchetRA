@@ -46,12 +46,12 @@
 --     whose first visit is open is played there (hub_follow_new), not undone.
 -- Frame guards (after a finish, after the hub start) count frames of this session only.
 -- The developer keys (] [ /) are bound by dev(keys).lua; this file only provides their actions.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["15_rando_hub"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["15_rando_hub"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 RANDO_HUB = RANDO_HUB or {}
 local H = RANDO_HUB
 local C = RANDO_CAMPAIGN
 local DB = RANDO_DATA
-H.VERSION = "10.0.35"
+H.VERSION = "10.0.39"
 
 local function log(...) pcall(rivet.log, "[rando]", "RANDO-HUB", ...) end
 local function S() return RANDO and RANDO.state end
@@ -356,9 +356,11 @@ function H.home_candidates()
   end
   return out
 end
-function H.go_home(why)
+-- ret (v0.75): a plain trip back after a finished destination (never the hub's start; H.on_arrival)
+function H.go_home(why, ret)
   local p, h = H.plan(), H.state()
   if not (p and h) then return false end
+  if ret == nil and H.expect and H.expect.planet == p.planet then ret = H.expect.ret end   -- a retry keeps it
   local cands = H.home_candidates()
   local start = (H.expect and H.expect.planet == p.planet and H.expect.cand or 0) + 1
   for i = start, #cands do
@@ -372,7 +374,7 @@ function H.go_home(why)
         h.phase = "hub"
         return true
       end
-      H.expect = { planet = p.planet, at = H.frame, how = "warp", cp = cands[i], cand = i, why = why }
+      H.expect = { planet = p.planet, at = H.frame, how = "warp", cp = cands[i], cand = i, why = why, ret = ret or nil }
       return true
     end
     log("warp to", cands[i], "failed:", tostring(res))
@@ -1246,12 +1248,17 @@ function H.finish(d, how, quiet)
   -- 0 again: the guard below then held long into the next session - round 26)
   H.session.finished_frame = H.frame
   h.finished_at = nil
-  if not H.enabled() then
+  -- v0.75: planet shuffle switched ON in a run that is past the parade only starts the hub with the next New Game
+  -- (H.set_shuffle). Until then a finished planet is the plain trip back, as with shuffle off: the trip back used to
+  -- land as "the hub's start" and started the campaign in the middle of the player's own run (it primed other
+  -- planets' missions and locked travel).
+  if not H.enabled() or not h.started then
     -- v0.60: planet shuffle off - the game's own order goes on, and you are brought back to the hub all the same
     if H.returns() and H.returns_after(d) then
       local delay = cfg("hub_return_delay", 12)
       H.return_at = H.frame + math.max(1, delay) * 60
-      log("destination", d.id, "finished (planet shuffle off) - back to the hub in", delay, "s; the game's own order goes on")
+      log("destination", d.id, "finished (" .. (H.enabled() and "the hub has not started" or "planet shuffle off") ..
+          ") - back to the hub in", delay, "s; the game's own order goes on")
       say(msg, { type = "planet", sub = string.format("Back to %s in %d s", HUBN(), delay), duration = 8 })
     else
       say(msg, { type = "planet", sub = "Fly on with the ship's planet menu", duration = 8 })
@@ -1406,6 +1413,8 @@ function H.on_arrival(pid, from)
   H.session.world = { travel = false, levels = {} }
   if not (p and h) then return false end
   if not H.enabled() then return H.arrival_off(pid, from) end
+  -- v0.75: the trip back of a run whose hub has not started lands like the shuffle-off trip (never the hub's start)
+  if not h.started and H.expect and H.expect.ret then return H.arrival_off(pid, from) end
   local exp = H.expect
   H.expect = nil
   if exp and exp.planet == pid then H.watch_inventory("the trip to " .. tostring(pid)) end
@@ -1562,7 +1571,8 @@ function H.arrival_off(pid, from)
     H.expect = nil
     if exp.cp and not H.is_opening_cp(exp.cp) then h.home_cp = exp.cp end
     H.watch_inventory("the trip to " .. tostring(pid))
-    log("back at the hub (" .. HUBN() .. ") at", tostring(exp.cp), "- planet shuffle off: the game's own order goes on")
+    log("back at the hub (" .. HUBN() .. ") at", tostring(exp.cp), "-", H.enabled() and "planet shuffle starts with your next New Game:"
+        or "planet shuffle off:", "the game's own order goes on")
     say("Back at " .. HUBN(), { type = "planet", sub = "Fly on with the ship's planet menu", duration = 6 })
     H.after(H.SETTLE, function() H.travel_after_return("back at the hub") end, "travel after the return")
     return true
@@ -1817,7 +1827,7 @@ function H.tick_off(frame, ready)
     H.return_at = nil
     if S().current_planet == p.planet then
       log("destination finished - already at the hub, no trip back")
-    elseif not H.go_home("destination finished (planet shuffle off)") then
+    elseif not H.go_home("destination finished (planet shuffle off)", true) then
       say("Randomizer: the warp to " .. HUBN() .. " failed - take the ship", { type = "center", duration = 6 })
     end
   end
@@ -1852,7 +1862,8 @@ function H.tick(frame, ready)
       log("no arrival at the hub after", H.ARRIVE_TIMEOUT, "frames from", e.cp)
       if not H.go_home(e.why or "retry") then
         H.expect = nil
-        if not h.started then H.start_failed("the warp did not land") end
+        if not h.started and not e.ret then H.start_failed("the warp did not land")
+        elseif e.ret then say("Randomizer: the warp to " .. HUBN() .. " failed - take the ship", { type = "center", duration = 6 }) end
       end
     elseif e.how == "fly" then
       log("the ship did not land on", e.planet, "- warping")
@@ -1877,7 +1888,7 @@ function H.tick(frame, ready)
     h.current = nil
     if S().current_planet == H.plan().planet then
       log("destination finished - already at the hub, no trip back")
-    elseif not H.go_home("destination finished") then
+    elseif not H.go_home("destination finished", true) then
       say("Randomizer: the warp to " .. HUBN() .. " failed - take the ship" .. dev_hint(", or choose a destination with " .. K("key_hub", true)),
           { type = "center", duration = 6 })
     end

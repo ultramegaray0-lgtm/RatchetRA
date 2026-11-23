@@ -34,7 +34,7 @@
 -- v0.62-DEV10: steps 1-3 are replaced by the game's own type data (see "THE WEAPON ITEMS BY THE GAME'S OWN TYPE DATA"
 -- below): the weapon records are the WeaponItemPrius components of the scene, the Omega byte is the live
 -- WeaponItemPrius.Omega offset. Learning from a purchase stays only as the fallback (and as a confirmation).
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["17_rando_omega"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["17_rando_omega"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_OMEGA = RANDO_OMEGA or {}
 local O = RANDO_OMEGA
@@ -551,6 +551,45 @@ local function f32(b, i)
   local ok, f = pcall(function() return (string.unpack("<f", string.pack("<I4", v))) end)
   return ok and f or nil
 end
+-- v0.71-DEV2: an EMPTY SLOT is a weapon record the hero does not hold. The game numbers the weapons the hero owns
+-- (+12: 1001, 1002 ... - the WeaponType of the WeaponAddedEvent) and leaves every other record at 5000 + n with no XP and no
+-- ammo. round54 (v0.71-DEV1): Pixelizer, given in Zurkon, read slot 1005 / XP 317740 / ammo 16 (and its event said 1005);
+-- Negatron Collider, given in the Nefarious City intro, read slot 5015 / XP 0 / ammo 0 for the whole session, although the
+-- game had answered "added" (event 1002). Its Omega flag was written on that empty record: "applied", but not in the game.
+-- Every other check (ItemCount 1, ammo floats, Test list) passes for an empty slot too, so this one is separate.
+O.EMPTY_SLOT_FROM = 5000
+function O.slot_of(b) return (b and #b >= O.REL.itemid + 4) and u32(b, O.REL.itemid + 1) or nil end
+function O.empty_slot(b)
+  if not b or #b < O.REL.ammo + 4 then return false end
+  local slot = u32(b, O.REL.itemid + 1)
+  if slot < O.EMPTY_SLOT_FROM or u32(b, O.REL.xp + 1) ~= 0 then return false end
+  local a = f32(b, O.REL.ammo + 1)
+  return a == nil or a == 0
+end
+O.empty_since, O.regives = {}, {}
+O.REGIVE_AFTER = 900               -- frames a confirmed weapon may stay an empty slot before it is sent again
+O.MAX_REGIVE = 2                   -- sends per weapon and load
+-- a weapon the game answered "added" for, whose record is still an empty slot: log it once, then send it again
+function O.note_empty(w, name, b)
+  local now = O.frame
+  if not O.empty_since[w] then
+    O.empty_since[w] = now
+    local hx = {}
+    for i = 1, math.min(#b, 40) do hx[#hx + 1] = string.format("%02X", b[i]) end
+    log(string.format("%s waits: the record of %s is an empty slot (slot %s, XP %s, ammo %s) - the game does not hold the weapon (yet)",
+        name, w, tostring(O.slot_of(b)), tostring(u32(b, O.REL.xp + 1)), tostring(f32(b, O.REL.ammo + 1))))
+    log("EVIDENCE empty slot " .. w .. " from its id:", table.concat(hx, " "))
+    return
+  end
+  if now - O.empty_since[w] >= O.REGIVE_AFTER and (O.regives[w] or 0) < O.MAX_REGIVE and RANDO_REAL and RANDO_REAL.regive then
+    O.regives[w] = (O.regives[w] or 0) + 1
+    O.empty_since[w] = now
+    local ok = RANDO_REAL.regive("weapon:" .. w, "its record is still an empty slot; " .. name .. " needs the weapon")
+    log(string.format("%s: the weapon is still not in your inventory - sending %s again (try %d of %d)%s", name, w, O.regives[w], O.MAX_REGIVE, ok and "" or " (not possible now)"))
+    if ok then say("Randomizer: " .. name .. " - your weapon is missing, sending it again") end
+  end
+end
+
 -- one weapon item component: every place in it (and in its prius data) that holds a weapon id
 local function ddl_item(D, comp, cls)
   local size = math.max(0x48, math.min(cls.inst_size and cls.inst_size > 0 and cls.inst_size or 0x400, O.INST_MAX))
@@ -1080,6 +1119,9 @@ function O.on_vendor_purchase(name)
   local w = O.weapon_of_vendor_name(name)
   if not w then return end
   O.vendor_pending[w] = { at = O.frame, name = name }
+  -- v0.75: a snapshot still queued or running (behind DEV8's "xp" or DEV9's "held" job) would read the records AFTER
+  -- this purchase and replace the read from before it: the purchase would then compare with itself. It is dropped.
+  for i = #O.jobs, 1, -1 do if O.jobs[i].kind == "snapshot" then table.remove(O.jobs, i) end end
 end
 function O.on_weapon_purchase(weapon_name)
   -- a weapon bought (not an Omega): forget the pending vendor purchase of it, read the records again later
@@ -1171,6 +1213,30 @@ function O.owned_in_game(w)
   local b = read(rec.id_at, O.REL.xp + 4)
   return hex64(b, 1) == O.ID_OF[w] and #b >= O.REL.xp + 4 and u32(b, O.REL.count + 1) == 1 and u32(b, O.REL.xp + 1) > 0
 end
+-- v0.71-DEV9: WHICH WEAPONS THE HERO HOLDS (12_rando_shop.lua: a bonus slot selling a weapon you already own cannot be bought,
+-- so its bonus is given directly). A record of the hero's own set (hero_owned) holding the weapon's id, ItemCount 1 and not an
+-- empty slot (slot 5000+ with no XP and no ammo). Read after every census and every O.HELD_EVERY frames; dropped by a load
+-- (O.on_loading, O.on_checkpoint_load, O.forget), so a save loaded afterwards is read again before anything counts.
+O.HELD_EVERY = 600
+O.held = nil                                        -- { [w] = true } or nil while not read
+function O.held_pass()
+  local inv = O.inv
+  if not (inv and inv.hero_owned) then return end
+  local held, names = {}, {}
+  for _, w in ipairs(GEN.sorted_keys(inv.records)) do
+    local b = read(inv.records[w].id_at, O.REL.ammo + 4)
+    if O.inv ~= inv then return end                 -- the records were dropped meanwhile
+    if hex64(b, 1) == O.ID_OF[w] and #b >= O.REL.ammo + 4 and u32(b, O.REL.count + 1) == 1 and not O.empty_slot(b) then
+      held[w] = true; names[#names + 1] = w
+    end
+  end
+  local txt = table.concat(names, " ")
+  O.held, O.held_frame = held, O.frame
+  if txt ~= O.held_logged then
+    O.held_logged = txt
+    log(string.format("held: %d weapon(s) in your inventory: %s", #names, #names > 0 and txt or "none"))
+  end
+end
 local function delivered(w)
   local s = S()
   local r = s and s.real and s.real["weapon:" .. w]
@@ -1191,6 +1257,8 @@ function O.set_flag(w, off, only_read)
   if hex64(b, 1) ~= O.ID_OF[w] then return nil, "the record moved" end
   -- v0.62-DEV13: and still an owned weapon (ItemCount 1): a reused or override copy is never written
   if b[O.REL.count + 4] == nil or u32(b, O.REL.count + 1) ~= 1 then return nil, "the record is not an owned weapon now" end
+  -- v0.71-DEV2: a record the hero does not hold is never written (round54: Omega Negatron Collider "applied" to slot 5015)
+  if O.empty_slot(b) then return nil, "empty slot", b end
   local v = b[off + 1]
   if v == 1 then return "already" end
   if v ~= 0 then return nil, string.format("byte +0x%X holds %s, not a flag", off, tostring(v)) end
@@ -1211,7 +1279,7 @@ function O.pass(why)
   for _, w in ipairs(GEN.sorted_keys(s.omega or {})) do
     local o = s.omega[w]
     if type(o) == "table" and O.inv.records[w] and (O.fails[w] or 0) < O.MAX_WRITE_FAILS then
-      local r, err = O.set_flag(w, off, not delivered(w))
+      local r, err, eb = O.set_flag(w, off, not delivered(w))
       local name = RANDO.item_name("omega:" .. w)
       if r == "set" and o.status == "applied" then
         log("kept " .. name .. " - its flag had been cleared (" .. why .. "), set again")
@@ -1221,11 +1289,13 @@ function O.pass(why)
           RANDO.omega_applied(w, r == "set" and ("flag set, " .. how) or "the game already had it")
           say("Randomizer: " .. name .. " is yours", { type = "pickup", duration = 5 })
         end
+      elseif r == nil and err == "empty slot" then
+        O.note_empty(w, name, eb)
       elseif r == nil and err ~= "waits for the weapon" then
         O.fails[w] = (O.fails[w] or 0) + 1
         log("could not set " .. name .. " - " .. tostring(err) .. " (try " .. O.fails[w] .. ")")
       end
-      if r then O.game_omega[w] = true end
+      if r then O.game_omega[w] = true; O.empty_since[w] = nil end
     end
   end
   -- Omegas the game itself showed (bought, or from a New Game+ save): never lost by a randomizer send
@@ -1233,7 +1303,7 @@ function O.pass(why)
     if not (s.omega and s.omega[w]) and O.inv.records[w] and (O.fails[w] or 0) < O.MAX_WRITE_FAILS then
       local r, err = O.set_flag(w, off)
       if r == "set" then log("kept the game's Omega " .. w .. " - its flag had been cleared (" .. why .. "), set again")
-      elseif r == nil then O.fails[w] = (O.fails[w] or 0) + 1; log("could not keep " .. w .. " - " .. tostring(err)) end
+      elseif r == nil and err ~= "empty slot" and err ~= "waits for the weapon" then O.fails[w] = (O.fails[w] or 0) + 1; log("could not keep " .. w .. " - " .. tostring(err)) end
     end
   end
 end
@@ -1243,16 +1313,125 @@ function O.read_game_omega()
   if not (off and O.inv) then return end
   for _, w in ipairs(GEN.sorted_keys(O.inv.records)) do
     local b = read(O.inv.records[w].id_at, off + 1)
-    if hex64(b, 1) == O.ID_OF[w] and b[off + 1] == 1 and not O.game_omega[w] then
+    if hex64(b, 1) == O.ID_OF[w] and b[off + 1] == 1 and not O.game_omega[w] and not O.empty_slot(b) then
       O.game_omega[w] = true
       log("the game holds", w, "as Omega")
     end
   end
 end
 
+
+-- ---- v0.71-DEV8 WEAPON XP ---------------------------------------------------------------------
+-- A weapon XP reward ("filler:xp:N", generator setting weapon_xp) is queued in state.xp_pending (location -> amount) by
+-- 10_rando_runtime.lua and given here, once the weapon records are found and their layout is TRUSTED (the same check the
+-- Omega flag needs): XP is WeaponItemPrius.XP, a u32 at +16 from the record's item id (O.REL.xp; round 60 read it on every
+-- record: Enforcer 15807, RYNO 8 783588 ...). The game shows a weapon's level from its XP, so a write is read back and
+-- logged with the before / after values. Which weapon (weapon_xp_target):
+--   "smart" (default): an OMEGA weapon you hold first (it can level to 10), the one with the least XP; with none, the weapon
+--                      you hold with the least XP (so the reward is never wasted on a weapon that is already high);
+--   "lowest": the weapon you hold with the least XP, Omega or not.
+-- A weapon you hold is a record with ItemCount 1 that is no empty slot (O.empty_slot). A checkpoint load that takes the XP
+-- back (you died before the game saved) is noticed after the load (XP below what was written) and given again, twice at most.
+-- NOT VERIFIED IN THE GAME: that the level shown follows the written XP at once (it may update at the next kill).
+O.XP_EVERY = 60
+O.XP_MAX = 0x7FFFFFFF
+O.XP_REGIVE_MAX = 2
+O.xp_recent = O.xp_recent or {}          -- this session's writes: { lid, w, after, amount, regives }
+function O.xp_holder(w)
+  local rec = O.inv and O.inv.records[w]
+  if not rec then return nil end
+  local b = read(rec.id_at, O.REL.omega + 1)
+  if hex64(b, 1) ~= O.ID_OF[w] or #b < O.REL.xp + 4 then return nil end
+  if u32(b, O.REL.count + 1) ~= 1 or O.empty_slot(b) then return nil end
+  local slot = O.slot_of(b)
+  if not slot or slot >= O.EMPTY_SLOT_FROM then return nil end
+  local off = O.offset()
+  local om = off and b[off + 1] == 1
+  return { w = w, rec = rec, xp = u32(b, O.REL.xp + 1), omega = om or O.game_omega[w] == true }
+end
+function O.xp_target()
+  local mode = tostring(cfg("weapon_xp_target") or "smart")
+  local best, best_om
+  for _, w in ipairs(GEN.sorted_keys(O.inv and O.inv.records or {})) do
+    local h = O.xp_holder(w)
+    if h then
+      if not best or h.xp < best.xp then best = h end
+      if h.omega and (not best_om or h.xp < best_om.xp) then best_om = h end
+    end
+  end
+  if mode ~= "lowest" and best_om then return best_om, "Omega first" end
+  return best, best_om and "the least XP" or "no Omega weapon held: the least XP"
+end
+function O.xp_write(h, amount)
+  local new = math.min(O.XP_MAX, h.xp + amount)
+  local le = string.format("%02X %02X %02X %02X", new & 0xFF, (new >> 8) & 0xFF, (new >> 16) & 0xFF, (new >> 24) & 0xFF)
+  local ok, err = pcall(rivet.write, hexaddr(h.rec.id_at + O.REL.xp), le)
+  if not ok then return nil, "write refused: " .. tostring(err) end
+  local back = read(h.rec.id_at + O.REL.xp, 4)
+  if #back < 4 or u32(back, 1) ~= new then return nil, "read back " .. tostring(#back == 4 and u32(back, 1)) end
+  return new
+end
+function O.xp_pass()
+  local s = S()
+  if not (s and s.xp_pending and next(s.xp_pending) and O.inv and O.offset()) then return end
+  if O.inv.route == "type data" and not O.inv.hero_owned then return end
+  s.xp_done = s.xp_done or {}
+  for _, lid in ipairs(GEN.sorted_keys(s.xp_pending)) do
+    local amount = s.xp_pending[lid]
+    if s.xp_done[lid] then
+      s.xp_pending[lid] = nil; changed()
+    elseif type(amount) == "number" and amount > 0 then
+      local h, why = O.xp_target()
+      if not h then
+        if not O.xp_none_said then O.xp_none_said = true; log("WEAPON-XP waits: no weapon you hold was found in the records yet") end
+        return
+      end
+      local after, err = O.xp_write(h, amount)
+      local name = RANDO.item_name("weapon:" .. h.w)
+      if after then
+        s.xp_pending[lid] = nil
+        s.xp_done[lid] = { w = h.w, amount = amount, before = h.xp, after = after }
+        changed()
+        O.xp_recent[#O.xp_recent + 1] = { lid = lid, w = h.w, after = after, amount = amount, regives = 0 }
+        log(string.format("WEAPON-XP %s: +%d XP to %s%s (%s): %d -> %d", lid, amount, h.omega and "Omega " or "", name, why, h.xp, after))
+        say(string.format("Randomizer: +%d weapon XP to %s%s", amount, h.omega and "Omega " or "", name), { type = "corner", duration = 4 })
+      else
+        O.fails["xp:" .. h.w] = (O.fails["xp:" .. h.w] or 0) + 1
+        log("WEAPON-XP could not give", amount, "XP to", name, "-", tostring(err))
+        return
+      end
+      O.pause()
+    else
+      s.xp_pending[lid] = nil; changed()
+    end
+  end
+end
+-- after a load: an XP write the checkpoint took back is given again
+function O.xp_check_rollback()
+  for _, e in ipairs(O.xp_recent) do
+    if e.regives < O.XP_REGIVE_MAX then
+      local h = O.xp_holder(e.w)
+      if h and h.xp < e.after - e.amount // 2 then
+        local after = O.xp_write(h, e.amount)
+        if after then
+          log(string.format("WEAPON-XP %s: the load took %s's XP back (%d, written %d) - given again: %d", e.lid, e.w, h.xp, e.after, after))
+          e.regives, e.after = e.regives + 1, after
+        end
+      end
+    end
+  end
+end
+-- 10_rando_runtime.lua: a weapon XP reward was paid (queued in state.xp_pending). Returns how it will arrive
+function O.xp_request(lid, amount)
+  O.next_xp = 0
+  if cfg("omega_runtime") == false then return "off" end
+  if not O.offset() then return "waits" end
+  return "queued"
+end
+
 -- ---- jobs -------------------------------------------------------------------------------------
 function O.start_job(kind, fn)
-  for _, j in ipairs(O.jobs) do if j.kind == kind and (kind == "search" or kind == "keep" or kind == "snapshot") then return false end end
+  for _, j in ipairs(O.jobs) do if j.kind == kind and (kind == "search" or kind == "keep" or kind == "snapshot" or kind == "xp" or kind == "held") then return false end end
   O.jobs[#O.jobs + 1] = { kind = kind, co = coroutine.create(fn) }
   return true
 end
@@ -1304,6 +1483,8 @@ function O.forget(why)
   -- there too ("kept the game's Omega bouncer ... set again"). Every load comes from a save, so the game's own
   -- Omegas are read again after it (O.read_game_omega); only the randomizer's own Omega rewards (state.omega) are kept.
   O.game_omega, O.fails = {}, {}
+  O.empty_since, O.regives = {}, {}            -- v0.71-DEV2
+  O.held = nil                                  -- v0.71-DEV9
   O.next_search = O.frame + O.SETTLE
   O.inv_why = why
 end
@@ -1312,9 +1493,11 @@ end
 -- dropped and read again after it; the game's Omegas of this save stay known.
 function O.on_checkpoint_load()
   O.inv, O.snap, O.dstate, O.progress = nil, nil, nil, nil
+  O.held = nil                                  -- v0.71-DEV9: read again after the load
   local keep = {}
   for _, j in ipairs(O.jobs) do if j.kind ~= "search" and j.kind ~= "keep" and j.kind ~= "snapshot" then keep[#keep + 1] = j end end
   O.jobs = keep
+  O.empty_since = {}                            -- v0.71-DEV2: the records are read again after the load
   O.next_search = O.frame + O.SETTLE
 end
 -- v0.62-DEV14: called by 10_rando_runtime.lua on every frame of a load (death, retry, checkpoint, save load, travel:
@@ -1331,6 +1514,7 @@ function O.on_loading()
     O.jobs, O.handle_cache, O.item_probe_queue = {}, {}, {}
     O.walked, O.wstate = nil, nil
     O.refresh = nil
+    O.held = nil                                -- v0.71-DEV9: read again after the load
     O.dropped_for_load = (O.dropped_for_load or 0) + 1
     if O.dropped_for_load <= 20 then log("a load began: the census and the records are dropped, read again after it") end
   end
@@ -1405,6 +1589,9 @@ function O.tick(frames, ready)
         O.snap = { inv = inv, bytes = snapshot(inv), why = "found" }   -- v0.62-DEV6: the read an Omega purchase is compared with
         O.read_game_omega()
         O.pass("after a load")
+        O.xp_check_rollback()                                -- v0.71-DEV8
+        O.held_pass()                                        -- v0.71-DEV9
+        O.next_held = O.frame + O.HELD_EVERY
         O.next_keep = O.frame + O.KEEP_EVERY
       elseif why ~= O.inv_why then
         O.inv_why = why
@@ -1416,6 +1603,16 @@ function O.tick(frames, ready)
   if O.frame >= O.next_keep and O.offset() then
     O.next_keep = O.frame + O.KEEP_EVERY
     O.start_job("keep", function() O.pass("check") end)
+  end
+  -- v0.71-DEV9: which weapons you hold (12_rando_shop.lua pays the bonus of a slot whose weapon you already own)
+  if O.inv.hero_owned and O.frame >= (O.next_held or 0) then
+    O.next_held = O.frame + O.HELD_EVERY
+    O.start_job("held", O.held_pass)
+  end
+  -- v0.71-DEV8: weapon XP rewards waiting for a weapon record
+  if s.xp_pending and next(s.xp_pending) and O.frame >= (O.next_xp or 0) and O.offset() then
+    O.next_xp = O.frame + O.XP_EVERY
+    O.start_job("xp", function() O.xp_pass() end)
   end
   -- v0.62-DEV6: Omega purchases (VendorPurchaseEvent alone) and a fresh read of the records for the next one
   if next(O.vendor_pending) then O.vendor_tick(); return end
@@ -1486,7 +1683,7 @@ if RANDO and RANDO.subscribe then
     end
     RANDO_TRAVEL.on_checkpoint = RANDO_TRAVEL.omega_wrapper
   end
-  log("loaded (10.0.35: Omega from the game's type data; nothing is read while the game loads)")
+  log("loaded (10.0.39: Omega from the game's type data; nothing is read while the game loads)")
 else
   log("RANDO-ERROR 10_rando_runtime.lua is missing: Omega versions stay records only")
 end

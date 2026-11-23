@@ -1,10 +1,10 @@
-# Third-party notices and credits: v0.70
+# Third-party notices and credits: v0.75
 
 ## This mod
 
 Author: **MegaRay**. The randomizer's own files (Lua scripts, companion scripts, `rivet.toml`,
 `rando_give.dll` and its source, documentation) are released under the **MIT License**
-(`LICENSE.txt` in the repository root).
+(`LICENSE.txt` in the repository root). The Lite package contains only the Lua scripts, `rivet.toml` and documentation.
 
 **AI disclosure:** most of the code and documentation was written with Anthropic's Claude under
 MegaRay's direction. Research, design decisions and in-game testing were done by MegaRay. No

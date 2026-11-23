@@ -29,7 +29,7 @@
 -- checkpoint is logged by name (RANDO-CHECKPOINT) and the hub knows where a mission really starts.
 -- In a hub seed the hub (15_rando_hub.lua) handles arrivals itself while planet shuffle runs; with
 -- planet shuffle off, or without the hub, a hub seed's travel is never locked (T.active).
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["14_rando_travel"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["14_rando_travel"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_TRAVEL = RANDO_TRAVEL or {}
 local T = RANDO_TRAVEL

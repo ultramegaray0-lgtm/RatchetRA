@@ -52,7 +52,7 @@
 -- the slot must hold what was written, a write is read back, refused writes are not repeated, and a
 -- Templates list two nodes share is not written. When Chaos is switched OFF its slots go back to their
 -- originals and the Enemy / Boss Randomizers plan again from their own settings.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["16_rando_spawners"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["16_rando_spawners"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_SPAWNERS = RANDO_SPAWNERS or {}
 local SP = RANDO_SPAWNERS
@@ -1640,7 +1640,7 @@ V.NOTE_QUEUE = 4                          -- dev 10.29: notes waiting at most (t
 -- dev 10.31: "all" (the dev kit's default): EVERY regular enemy may replace every other of its movement group
 -- (dev 10.32: enemy_mix_movement = true mixes walkers, flyers and turrets; off by default). Only a pair the game has
 -- shown cannot be killed (built-in "bad", rejected in your save, or rejected this session by the combat watch) stays out.
-V.COMPAT_MODES = { verified = true, trial = true, any = true, all = true }
+V.COMPAT_MODES = { verified = true, trial = true, any = true, all = true, max = true }   -- v0.71-DEV8: max
 V.COMBAT_DEATHS = 6                       -- other deaths on the level after a replaced bot spawned ...
 V.COMBAT_SECONDS = 45                     -- ... and seconds it lived: alive past BOTH = it does not die in a fight
 V.STALL_SECONDS = 40                      -- dev 10.32: a replaced bot of an unverified pair alive this long while NOTHING on
@@ -2059,6 +2059,13 @@ V.REG_BUILTIN = {
   ["D64B49443C3246E4"] = "veh_thug_dropship_shooter|large|GameBotShooterArmoredTransport|boss",
   ["F04DE470088CD346"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
   ["FBEC48BA70BCAB89"] = "veh_thug_dropship|large|GameBotShooterArmoredTransport|boss",
+  -- v0.75: round 62 (Savali, Nefarious troopers)
+  ["9520BFB8A35DFB49"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["9F06A7EC724672EF"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["9F08960BC2841361"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["AA0A3C0BC61FA90A"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["DB67B01C8F21496D"] = "enm_neo_nefarious_heavy|swarmer|GameBotMeleeSwarmer|enemy",
+  ["DC8BD6240CFBC521"] = "enm_neo_nefarious_melee|swarmer|GameBotMeleeSwarmer|enemy",
 }
 -- every uid the registry knows (the save's and the built-in ones)
 function V.reg_uids()
@@ -2200,13 +2207,25 @@ function V.compat_mode()
   local m = RANDO and RANDO.config and RANDO.config.enemy_compat
   return V.COMPAT_MODES[m] and m or "verified"
 end
--- dev 10.31
-function V.all_mode() return V.compat_mode() == "all" end
+-- dev 10.31 ("max" is "all" and more, v0.71-DEV8)
+function V.all_mode() local m = V.compat_mode(); return m == "all" or m == "max" end
+-- v0.71-DEV8 MAX COVERAGE (enemy_compat = "max", the dev kit's default). Round 60 (DEV7): 2,348 enemy spawns, 129 replaced.
+-- The biggest reasons a spawn kept its enemy were the pool (377 "no other walker kind known on this level", 40 "no other
+-- flyer kind": walkers and flyers were kept apart), the evidence filter (243 "every replacement here is rejected" - the
+-- built-in Zurkon pirate rules and the robot shooter's ban emptied Zurkon's pool) and kinds not learned yet. You saw the
+-- replacements that glitched still die, so "max": every regular enemy may become every other loaded on the level, walkers,
+-- flyers and turrets mixed (a Savali pool shark still only takes a flyer: its spawn is over water), no pair is rejected by
+-- earlier evidence, and the combat watch only LOGS a replacement that seems not to die (nothing is put back). The safety
+-- net stays: an encounter you die in or reload V.RETRY_LIMIT (5) times keeps its original enemies for the seed, and story
+-- boss areas and the Boss Randomizer's rules are unchanged.
+function V.max_mode() return V.compat_mode() == "max" end
 -- walkers, flyers and turrets replace each other (boss tier: its own groups among themselves)
 -- dev 10.32: only when enemy_mix_movement = true (now OFF by default). Round42: every replaced bot that could not be
 -- killed was a walker (pirate robot shooter) at a flyer's spawn - a Nefarious sniper's in C5, a biker's in B3.
 function V.mix_movement()
-  return V.all_mode() and (RANDO and RANDO.config and RANDO.config.enemy_mix_movement == true) or false
+  local mix = RANDO and RANDO.config and RANDO.config.enemy_mix_movement
+  if V.max_mode() then return mix ~= false end                              -- v0.71-DEV8: on unless switched off
+  return V.all_mode() and mix == true or false
 end
 -- the movement groups a spawner of group g may take its replacement from
 function V.groups_for(g)
@@ -2270,6 +2289,7 @@ end
 function V.compat_allows(r, rep, origs)
   local mode = V.compat_mode()
   if mode == "any" then return true, "any" end
+  if mode == "max" then return true, "all" end                             -- v0.71-DEV8: no evidence filter
   origs = origs or V.origs_of(r)
   -- dev 10.33: a banned replacement kind only ever stands in for itself
   if V.rep_ban(rep) then
@@ -2377,6 +2397,14 @@ end
 -- rejected for this session at once, for the save only after V.SUSPECT_LIMIT stalls (a death in between clears it)
 function V.combat_reject(pairs, why, label, soft)
   local lvl = V.lvl
+  if V.max_mode() then
+    -- v0.71-DEV8: logged only - nothing is put back, nothing is kept in the save (round 60: the ones that glitched still died)
+    for _, p in ipairs(pairs or {}) do
+      local c = V.combat_c(p)
+      if not c.max_noted then c.max_noted = true; vlog(string.format("COMBAT WATCH %s: %s - kept (enemy_compat = max)", p, why)) end
+    end
+    return
+  end
   V.session.compat_bad = V.session.compat_bad or {}
   local said = {}
   for _, p in ipairs(pairs or {}) do
@@ -2946,9 +2974,9 @@ end
 -- the level's pool for a movement group: usable templates loaded here (a handle in a variable or found by uid)
 -- (excl: names the pick must not have - the original, or a group's members; need_uid: the variable holds a uid, so
 -- the replacement must have one too - round37's factories: whatever the original held, the write kept that form)
-function V.pool(group, excl, need_uid)
+function V.pool(group, excl, need_uid, strict)
   local out = {}
-  local groups = V.groups_for(group)                                       -- dev 10.31: mixed movement in "all"
+  local groups = strict and { [group] = true } or V.groups_for(group)      -- dev 10.31: mixed movement in "all"
   for _, T in pairs(V.lvl.tpl) do
     local g = V.group_of(T)
     if g and groups[g] and (T.uid or not need_uid) and not (T.class and V.SOURCE_ONLY[T.class]) then
@@ -2965,8 +2993,9 @@ end
 -- and ANOTHER SPECIES whenever the level has one loaded (round39: 10.28 swapped the Zurkon pirates among themselves
 -- and the Cordelion amoeboids among their sizes - "the enemies were the same").
 function V.pick(r, group, excl, n, need_uid)
-  local pool = V.pool(group, excl, need_uid)
-  if #pool == 0 and r.kind == "group" then pool = V.pool(group, nil, need_uid) end
+  local strict = r.strict_group                                            -- v0.71-DEV8: a pool shark takes a flyer only
+  local pool = V.pool(group, excl, need_uid, strict)
+  if #pool == 0 and r.kind == "group" then pool = V.pool(group, nil, need_uid, strict) end
   if #pool == 0 then
     return nil, V.mix_movement() and "no other enemy kind known on this level" or ("no other " .. group .. " kind known on this level")
   end
@@ -3092,7 +3121,7 @@ function V.plan_rec(sc, r)
     if not (orig_T and orig_T.family) then return note_why(r, "kind not known yet (learned from its first spawn)") end
     group, role = V.group_of(orig_T)
     if not group then return note_why(r, "protected: " .. tostring(role)) end
-    if orig_T.class and V.SOURCE_ONLY[orig_T.class] then group = V.SOURCE_ONLY[orig_T.class] end   -- v0.62-DEV5
+    if orig_T.class and V.SOURCE_ONLY[orig_T.class] then group = V.SOURCE_ONLY[orig_T.class]; r.strict_group = true end   -- v0.62-DEV5
     excl[1] = orig_T.name
   end
   if not group then return end
@@ -3177,7 +3206,8 @@ function V.compat_label(A)
   end
   if A.compat == "trial" then return "TRIAL: an unverified pair of the same bot class, watched" end
   if A.compat == "any" then return "enemy_compat = any: NOT combat-verified" end
-  if A.compat == "all" then return "enemy_compat = all: not combat-verified yet, watched (a death verifies it)" end
+  if A.compat == "all" then return V.max_mode() and "enemy_compat = max: not combat-verified yet, watched (logged only)"
+                                  or "enemy_compat = all: not combat-verified yet, watched (a death verifies it)" end
   return "not combat-verified"
 end
 

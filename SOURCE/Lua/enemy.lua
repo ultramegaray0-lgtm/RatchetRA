@@ -43,7 +43,7 @@
 -- factory started stays for its next wave instead of being put back as FAILED.
 --
 -- Needs 16_rando_spawners.lua. Removing this file only removes the enemy randomizer.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["enemy"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["enemy"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_ENEMY = RANDO_ENEMY or {}
 local E = RANDO_ENEMY

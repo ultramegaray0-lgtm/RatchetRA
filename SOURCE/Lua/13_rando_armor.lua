@@ -14,7 +14,7 @@
 --     giving it (an older DLL, interception off, a source the table missed) still collects its
 --     source, so nothing is ever lost - you then simply keep the game's own piece as well.
 -- Pieces owned before the seed started (the 30 of the Deluxe Edition and free sets) never count.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["13_rando_armor"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["13_rando_armor"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_ARMOR = RANDO_ARMOR or {}
 local A = RANDO_ARMOR
@@ -36,6 +36,8 @@ A.RING_EVERY = 10
 A.SYNC_EVERY = 30
 A.POLL_FRAMES = 300
 A.POLL_PER_FRAME = 4
+A.MASS = 3                       -- v0.71-DEV8: new pieces in one poll that are not pickups (phantoms)
+A.SETTLE = 300                   -- v0.71-DEV8: frames after a load before armor is polled again
 
 -- armor item key <-> bundle id, armor item key -> its source location
 A.BY_ID, A.SOURCE_OF, A.PIECES = {}, {}, {}
@@ -220,19 +222,45 @@ function A.poll(frame)
     log("baseline: " .. n .. " armor piece(s) owned before this seed - they do not count")
     return
   end
+  -- v0.71-DEV8 PHANTOM PIECES. Round 60 (DEV7): one pickup (Sargasso's pocket dimension, Galactic Ranger helmet) paid its item
+  -- (Omega Warmonger). A minute later, at the cinematic that follows the Ricochet purchase (CHK_CPZ_00_INTRO_CINE, the hero
+  -- switch), 16 pieces read "owned" in ONE poll - no pickup - and all 16 armor locations were paid at once ("found by
+  -- polling"); every armor piece you found afterwards had nothing left to give. A pickup gives one piece, so A.MASS or more
+  -- new pieces in one poll are not pickups: they are kept out (state.armor_phantom) until they read "not owned" again, and
+  -- only a piece that then comes back on its own counts. Nothing is polled during a load or in the first A.SETTLE frames
+  -- after one (the vanity data is being rebuilt then).
+  s.armor_phantom = s.armor_phantom or {}
+  local fresh = {}
   for _, key in ipairs(A.PIECES) do
-    if done.owned[key] and not s.armor_baseline[key] and not s.armor_found[key] then
-      s.armor_found[key] = true
+    if s.armor_phantom[key] and not done.owned[key] then
+      s.armor_phantom[key] = nil
       rt.mark_changed()
-      -- the randomizer gave it (a reward) or the ring already handled it: nothing to do
+      log("phantom piece cleared:", DB.items[key].name, "- it reads not owned again, a real pickup of it counts")
+    end
+    if done.owned[key] and not s.armor_baseline[key] and not s.armor_found[key] and not s.armor_phantom[key] then
       local ours = s.inventory[key] or (s.armor_sources or {})[key]
-      if not ours then
-        local lid = A.SOURCE_OF[key]
-        log("new piece without an intercepted source:", DB.items[key].name, lid or "")
-        if lid and seed.locations[lid] and not s.collected[lid] then
-          rt.collect(lid, "armor source of the " .. DB.items[key].name .. " (found by polling)")
-        end
+      if ours then
+        s.armor_found[key] = true                -- the randomizer gave it (a reward) or the ring already handled it
+        rt.mark_changed()
+      else
+        fresh[#fresh + 1] = key
       end
+    end
+  end
+  if #fresh >= A.MASS then
+    local names = {}
+    for _, key in ipairs(fresh) do s.armor_phantom[key] = true; names[#names + 1] = DB.items[key].name end
+    rt.mark_changed()
+    log(string.format("PHANTOM %d pieces read owned in one poll (no pickup gives that many) - not paid: %s", #fresh, table.concat(names, ", ")))
+    return
+  end
+  for _, key in ipairs(fresh) do
+    s.armor_found[key] = true
+    rt.mark_changed()
+    local lid = A.SOURCE_OF[key]
+    log("new piece without an intercepted source:", DB.items[key].name, lid or "")
+    if lid and seed.locations[lid] and not s.collected[lid] then
+      rt.collect(lid, "armor source of the " .. DB.items[key].name .. " (found by polling)")
     end
   end
 end
@@ -254,7 +282,10 @@ function A.tick(frame)
     if frame % A.RING_EVERY == 0 then A.read_ring(addr) end
     if seed.armor and A.hook == 1 and frame % A.SYNC_EVERY == 0 then A.sync(addr) end
   end
-  if seed.armor then A.poll(frame) end
+  -- v0.71-DEV8: never during a load or right after one (round 60's phantoms came with a load)
+  local rt = R()
+  if rt and rt.loading then A.quiet_until = frame + A.SETTLE; job = nil end
+  if seed.armor and frame >= (A.quiet_until or 0) then A.poll(frame) end
 end
 
 function A.new_game()

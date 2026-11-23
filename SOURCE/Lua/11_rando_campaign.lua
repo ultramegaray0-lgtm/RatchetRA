@@ -15,7 +15,7 @@
 --   * The game does not report mission states when a save loads (round 14), so the director
 --     asks the game (query) instead of waiting for events.
 --   * Travel (rivet.fly / rivet.warp) has not been used by the randomizer in your game yet.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["11_rando_campaign"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["11_rando_campaign"] = "10.0.39"   -- the kit check (10_rando_runtime.lua)
 RANDO_CAMPAIGN_RT = RANDO_CAMPAIGN_RT or {}
 local D = RANDO_CAMPAIGN_RT
 local C = RANDO_CAMPAIGN
