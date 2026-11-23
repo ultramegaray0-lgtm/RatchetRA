@@ -1,64 +1,52 @@
-# Ratchet & Clank: Rift Apart Randomizer v0.60 (beta)
+# Ratchet & Clank: Rift Apart Randomizer v0.70 (beta)
 
-**Download:** `Ratchet_Rift_Apart_Randomizer_v0.60_Player_Release.zip` (below, under Assets).
+**Download:** `Ratchet_Rift_Apart_Randomizer_v0.70_Player_Release.zip` (below, under Assets).
 This ZIP is everything a player needs. "Source code" archives GitHub adds automatically are the
 repository source, not the mod download. Older releases stay on the releases page.
 
 SHA-256 of the ZIP:
-`584aab41785646165440b90a5e0429411b00f680c2830a5ae9fd97ccbe55554d`
+`d3f76981fde3328e6a996d84eda115a9a73aeee90f16ca5c58b2fa45ad22f4f4`
 
 ## Requirements
 
 - Ratchet & Clank: Rift Apart, Steam v3.630.1.0, Windows 10/11 64-bit
-- **rivet_hook 2.0.1** (required, not included): https://github.com/neptuwunium/rivet_hook/releases
+- **rivet_hook 2.0.1** (required, not included; 2.0.0 also works): https://github.com/neptuwunium/rivet_hook/releases
 
 ## Install
 
 1. Back up `Documents\Ratchet & Clank - Rift Apart`.
 2. Install rivet_hook into the game folder.
-3. Copy everything inside the ZIP's `GAME_FOLDER` into the game folder.
+3. Copy everything inside the ZIP's `GAME_FOLDER` into the game folder (replace every file of
+   `scripts` when you update from v0.60).
 4. Run `rando_companion\Start-Companion.bat`, start the game, choose New Game.
 
 Full guide: `INSTALLATION.md` in the ZIP.
 
-## What's new in v0.60
+## What's new in v0.70
 
-- **Enemy Randomizer** (on by default). Regular enemies become other regular enemies loaded on the
-  same level. Bosses, story bosses, friendly bots and NPCs are never changed. Every replaced enemy
-  is watched; a replacement that cannot be killed is put back. **-** turns it on/off, **Ctrl+-**
-  shows what it changed.
-- **Back to the hub with planet shuffle on AND off.** After a planet's story you are taken back to
-  Nefarious City after 12 seconds. With planet shuffle off the game's own order goes on from there
-  (fly on with the ship's planet menu). Flying on yourself first cancels it; a new planet's first
-  visit that the story starts directly plays where it starts. `hub_auto_return = false` turns it off.
-- **Omega weapons** (`omega_weapons`, **off by default, beta**). The 20 Omega versions become
-  rewards; an Omega found first also gives its weapon, the weapon found later never takes the Omega
-  away, and nothing is given twice. The Omega upgrade itself cannot be applied in the game yet.
-- **`Install-ArsenalRestored.bat` is back** in `rando_companion`: drag the ARSENAL_RESTORED (rivet_hook
-  version) zip onto it.
-- `rando_give.dll` **v7** (needed by the Enemy Randomizer; source in `SOURCE/DLL`, reproducible).
-- Spybots and Lorbs hold no rewards (their pickups are not recognized yet).
+- **No more crash when you die, retry a checkpoint or load a save.** During a load, rivet_hook
+  runs the scripts while the game is freeing the level; the Omega search could read memory the
+  game had just freed. The randomizer now notices every load the moment it starts and reads or
+  writes nothing until it is over (`RANDO-LOAD` lines in `rivet.log`). Found in rivet_hook's
+  source and tested in a simulator; **not yet played in the game**, so please send `rivet.log` if
+  the game still closes when you die.
+- **Omega weapons work in the game.** With `omega_weapons = true` an Omega reward now turns your
+  weapon into its Omega version (seen in the developer's game: Omega Ricochet set and read back).
+  A few seconds after each load the screen says **Randomizer: Omega ready**. Still **off by
+  default**; turning it on makes a different seed.
+- Omega purchases at Ms. Zurkon are recognized, and the Omegas of one save are no longer copied into
+  another save you load.
+- Enemy Randomizer: more of Ardolis' enemies are recognized; pool sharks are never used as
+  replacements.
+- The scripts check that every file is from the same version and name a mixed install.
 
-**Updating from v0.55:** v0.60 makes different seeds - start a **New Game**. Delete every
-`*_rando_*.lua` file in `scripts` first, then copy the new files (`enemy.lua`, `16_rando_spawners.lua`
-and `17_rando_omega.lua` are new; `rando_give.dll` is replaced).
+## Seeds
 
-## Test status
-
-- **Real game** (development builds of this code, the developer's PC): the Enemy Randomizer in Zurkon
-  arena challenges A1, B3 and C5 - 92 enemies replaced, none left alive, every challenge completed;
-  `rando_give.dll` v7 since round 32.
-- **Automated tests only** (a game simulator; 842 tests, 0 failures, plus a 32-check package
-  validator): the trip back with planet shuffle off, Omega rules, the ARSENAL_RESTORED launcher's
-  file handling. Not yet played in the real game.
+With the default settings v0.70 makes **the same seeds as v0.60** (checked on 216 seeds), so a
+run in progress carries over: replace the scripts and keep playing.
 
 ## Known issues
 
-- The Enemy Randomizer can only use enemies loaded where you are (often one faction), and some story
-  fights are not changed yet (Cordelion's first visit: 0 of 45 in testing).
-- Omega weapons: the randomizer cannot yet set the Omega upgrade in the game.
-- The exact Steam build used in development is not confirmed. If `rivet.log` says `refused this
-  exe`, your game build differs; please report your `RiftApart.exe` version.
-- Some starting items may arrive only after the parade, once you reach Nefarious City.
-
-More: `DOCUMENTATION/KNOWN_ISSUES.md` in the repository.
+- Spybots and Lorbs hold no rewards (their pickups are not recognized yet).
+- Only enemies already loaded on a level can be used by the Enemy Randomizer.
+- Full list: `KNOWN_ISSUES.md` in the ZIP.

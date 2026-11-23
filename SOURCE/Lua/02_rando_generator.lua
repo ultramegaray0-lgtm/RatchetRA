@@ -88,7 +88,7 @@
 --   * Abilities the story gives (Speetle, Trudi, ...) cannot be granted: locations needing
 --     them, and locations whose trigger is not proven (armor finds, collectibles), only ever
 --     hold non-progression rewards.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["02_rando_generator"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["02_rando_generator"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
 RANDO_GEN = {}
 local G = RANDO_GEN
 G.VERSION = "10.11.0"
@@ -202,12 +202,17 @@ G.DEFAULTS = {
   coords_first_visit = true,      -- hub: progression never on a revisit or the finale, and a planet's
                                   -- Coordinates only where its first visit can be played once found
   -- dev 10.15
-  omega_weapons = false,          -- the 20 vanilla weapons' Omega versions (Challenge Mode / New Game+) join
-                                  -- the item pool as rewards of their own (omega:<weapon>); off: seeds as 10.13
+  omega_weapons = true,           -- the 20 vanilla weapons' Omega versions join the item pool as rewards of their
+                                  -- own (omega:<weapon>); off: seeds as 10.13. v0.62-DEV12: ON by default (round52:
+                                  -- verified in the game). A seed made before with the default (off) is a different
+                                  -- seed now: set omega_weapons = false to keep playing it
+  -- v0.62-DEV5
+  start_omega = 0,                -- random Omega versions (of the omega_weapons pool) you start with (0-20); the
+                                  -- weapon itself is given with it (an Omega needs its weapon, docs/OMEGA.md)
 }
 -- dev 10.15: settings added after 10.13 that are left out of the fingerprint while they have their
 -- default value, so every seed made without them is the same seed as before (same placements)
-G.FINGERPRINT_SINCE_10_15 = { omega_weapons = false }
+G.FINGERPRINT_SINCE_10_15 = { omega_weapons = false, start_omega = 0 }   -- v0.62-DEV5: start_omega
 -- items every seed starts with, whatever the settings say
 G.ALWAYS_START = { "hoverboots", "map_o_matic" }
 -- weapons the game itself hands out whatever happens and that are never rewards. 10.1: none (the
@@ -257,7 +262,7 @@ G.RANGES = { start_weapons = { 0, 4 }, start_gadgets = { 0, 2 },
              raritanium_min = { 1, 5000 }, raritanium_max = { 1, 5000 },
              bolts_budget = { 0, 5000000 }, raritanium_budget = { 0, 500000 }, bolts_percent = { 0, 100 },
              start_bolts = { 0, 100000 }, start_raritanium = { 0, 5000 },
-             shop_weapons = { 0, 15 }, early_weapons = { 0, 6 } }
+             shop_weapons = { 0, 15 }, early_weapons = { 0, 6 }, start_omega = { 0, 20 } }
 G.PRESETS = {
   -- 7.0 presets (9.0: the 8.0 hub presets are gone, G.RETIRED_PRESETS)
   -- balanced: every item system, the game's own level order, moderate currency, weapon prices
@@ -1441,9 +1446,23 @@ local function attempt(seed_text, s, fp, n, yield)
       if chosen[key] then start[#start + 1] = key; registry[key] = "start (chosen)"
       else list[#list + 1] = key end
     end
+    -- v0.62-DEV5 start_omega: that many random Omega versions start (their own stream: nothing else moves)
+    if (s.start_omega or 0) > 0 and #list > 0 then
+      local srng = G.rng(G.fnv1a(fp .. "#start_omega#" .. n))
+      local pick = {}
+      for _, key in ipairs(list) do pick[#pick + 1] = key end
+      srng.shuffle(pick)
+      local take_n, starting = math.min(s.start_omega, #pick), {}
+      for i = 1, take_n do starting[pick[i]] = true; start[#start + 1] = pick[i]; registry[pick[i]] = "start (start_omega)" end
+      local rest = {}
+      for _, key in ipairs(list) do if not starting[key] then rest[#rest + 1] = key end end
+      list = rest
+    end
     local spots = {}
     for _, loc in ipairs(pool) do
-      if not placement[loc.id] and loc.kind ~= "goldbolt" and DB.locations[loc.id].holds ~= "filler" then spots[#spots + 1] = loc.id end
+      -- v0.62-DEV12: never on a Spybot / Lorb (collectible): their pickup events are not bound yet, so the Omega
+      -- might never be given (round52's seed had 5 of 19 there)
+      if not placement[loc.id] and loc.kind ~= "goldbolt" and loc.kind ~= "collectible" and DB.locations[loc.id].holds ~= "filler" then spots[#spots + 1] = loc.id end
     end
     orng.shuffle(spots)
     G.stable_sort(spots, function(a, b)
@@ -1873,8 +1892,11 @@ function G.audit(seed)
     if DB.items[key].category == "omega" then
       local where = seen[key]
       if where and not omega_on[key] then bad(key .. " is placed although omega_weapons is off (or it is excluded)") end
+      if where and where ~= "start" and DB.locations[where] and DB.locations[where].kind == "collectible" then bad(key .. " is on a Spybot / Lorb (" .. where .. ")") end
       if where and where ~= "start" and DB.locations[where] and DB.locations[where].kind == "goldbolt" then bad(key .. " is on a Gold Bolt") end
-      if where == "start" and seed.registry[key] ~= "start (chosen)" then bad(key .. " starts without being chosen in start_items") end
+      if where == "start" and seed.registry[key] ~= "start (chosen)" and seed.registry[key] ~= "start (start_omega)" then
+        bad(key .. " starts without being chosen in start_items or start_omega")
+      end
       if sold[key] then bad(key .. " is sold in the shop") end
       if omega_on[key] and not where and not (seed.registry[key] or ""):find("^excluded") then bad(key .. " has no route and is not excluded") end
     end

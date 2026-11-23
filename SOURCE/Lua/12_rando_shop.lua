@@ -55,7 +55,7 @@
 -- rivet.read returns is now turned into bytes by one gsub with a lookup table and string.byte (no
 -- Lua loop per byte), reads are smaller, a slice also yields after H.SLICE_SECONDS, and a budget
 -- error makes the next try use half the read size instead of counting against the vendor.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["12_rando_shop"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["12_rando_shop"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_SHOP = RANDO_SHOP or {}
 local H = RANDO_SHOP
@@ -543,8 +543,54 @@ function H.helper_missing(n)
   return nil
 end
 
+-- v0.62-DEV5: READ-ONLY evidence for a shop route without memory offsets. Rounds 17-45 never found the vendor's slot
+-- array in memory ("only 0 vendor weapon(s) in the array at +0x48"), so Ms. Zurkon always sold her usual weapons -
+-- also the ones the seed placed on Gold Bolts (round45: "Ms. Zurkon could not be changed"). The dev settings now use
+-- shop = "vanilla" (her weapons are bought, never rewards). This logs, once per vendor config and session, what
+-- rivet.config() answers for it (field names, types, and the first entry of any list), so a later build can tell
+-- whether rivet.config_set reaches VendorConfig.ItemDatas by a path. Nothing is written.
+H.probed = H.probed or {}
+function H.probe_configs()
+  if H.probe_done or not (rivet.configs and rivet.config) then return end
+  if RANDO and RANDO.config and RANDO.config.shop_probe == false then H.probe_done = true; return end
+  local ok, list = pcall(rivet.configs, "VendorConfig", 20)
+  if not ok or type(list) ~= "table" then return end
+  if #list == 0 then return end
+  H.probe_done = true
+  for _, c in ipairs(list) do
+    local id = tostring(c.id):upper()
+    if not H.probed[id] then
+      H.probed[id] = true
+      local okc, cfg = pcall(rivet.config, id)
+      if okc and type(cfg) == "table" then
+        local parts = {}
+        for k, v in pairs(cfg) do
+          local d = type(v)
+          if d == "table" then
+            local n, first = 0, nil
+            for _, e in pairs(v) do n = n + 1; first = first or e end
+            d = "table[" .. n .. "]"
+            if type(first) == "table" then
+              local ks = {}
+              for fk, fv in pairs(first) do ks[#ks + 1] = tostring(fk) .. ":" .. type(fv) .. "=" .. tostring(fv):sub(1, 24) end
+              table.sort(ks)
+              d = d .. "{" .. table.concat(ks, ",") .. "}"
+            elseif first ~= nil then d = d .. "{" .. type(first) .. "=" .. tostring(first):sub(1, 24) .. "}" end
+          elseif d ~= "function" then d = d .. "=" .. tostring(v):sub(1, 32) end
+          parts[#parts + 1] = tostring(k) .. " " .. d
+        end
+        table.sort(parts)
+        log("PROBE vendor config", id, tostring(c.type or ""), "fields:", table.concat(parts, " | "))
+      else
+        log("PROBE vendor config", id, "rivet.config answered:", tostring(cfg))
+      end
+    end
+  end
+end
+
 function H.tick(frame)
   H.frame = frame
+  if frame % H.EVERY == 0 then pcall(H.probe_configs) end
   local seed, s = SEED(), S()
   if not (seed and s and s.started and seed.shop and seed.shop.mode == "shuffle" and seed.shop.slots) then return end
   if #H.jobs > 0 then

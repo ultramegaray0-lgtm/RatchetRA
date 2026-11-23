@@ -9,7 +9,7 @@
 --   missions    = { ["<MissionName from MissionCompleteEvent>"] = "planet:savali" },
 --   bolts       = { ["<BoltName from GainGoldBoltEvent>"]       = "goldbolt:10" },
 --   checkpoints = { ["<DestinationCheckpointName>"]             = "savali" },
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["05_rando_bindings"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["05_rando_bindings"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
 RANDO_BINDINGS = {
   -- PlanetChangedEvent.NewPlanetName -> planet id, for names observed after the model was frozen
   -- (adding them to the model would change every seed's fingerprint)
@@ -36,5 +36,14 @@ RANDO_BINDINGS = {
   -- collectibles: once rivet.log shows the event a pickup sends, bind it here, e.g.
   --   spybot = { class = "<EventClassName>" },  (optional: field = "Name", value = "...")
   -- Each event then completes the next "Spybot found #n" location (experimental_collectibles).
-  collectible_events = {},
+  -- v0.62-DEV5: from the game's own type data (neptuwunium/rivet Rivet.DDL.RCRA): a Spybot is a "RYNO plan"
+  -- (UICollectibleTypeRynoPlan: "Dialogue line for this spybot"; enum 0x81D3E717 = the 10 plans NefCity_01 ...
+  -- Zordoom_01) and its pickup sends RYNOPlayPickedUpEvent { RynoId } (RYNOScriptPickupEvent { RynoId } for a scripted
+  -- one). A Lorb is a "Ruin token" (enum 0xECCC3486 = Lorb_01 ... Lorb_12): RuinPlayPickedUpEvent { RuinId }.
+  -- The id makes one pickup pay once, whichever of the events comes. NOT seen in a rivet.log yet: the first pickup
+  -- logs "RANDO-DISCOVER RYNOPlayPickedUpEvent ..." and "RANDO-COLLECTIBLE spybot <id>".
+  collectible_events = {
+    spybot = { classes = { "RYNOPlayPickedUpEvent", "RYNOScriptPickupEvent" }, id_field = "RynoId" },
+    lorb = { class = "RuinPlayPickedUpEvent", id_field = "RuinId" },
+  },
 }

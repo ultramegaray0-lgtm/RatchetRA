@@ -1,6 +1,6 @@
-# Security and privacy: v0.60
+# Security and privacy: v0.70
 
-This page says what each part of the mod does, based on a review of the v0.60 source and player
+This page says what each part of the mod does, based on a review of the v0.70 source and player
 ZIP. It is not a certification by a third party: please check the source yourself if in doubt.
 
 ## Summary
@@ -15,7 +15,7 @@ ZIP. It is not a certification by a third party: please check the source yoursel
 
 | Part | Reads | Writes | Network |
 |---|---|---|---|
-| Lua scripts (`scripts\*.lua`, run by rivet_hook) | game memory through rivet_hook's API | game memory through rivet_hook's API (inventory, mission state, travel flags, the shop's slots, enemy spawners' template variables); log lines in `rivet.log` | none. The only standard-library call they use is `os.clock` |
+| Lua scripts (`scripts\*.lua`, run by rivet_hook) | game memory through rivet_hook's API | game memory through rivet_hook's API (inventory, mission state, travel flags, the shop's slots, enemy spawners' template variables, the Omega flag of your weapon records); log lines in `rivet.log` | none. The only standard-library call they use is `os.clock` |
 | `rando_give.dll` (loaded by rivet_hook) | `RiftApart.exe`'s code in memory, to check the exact game version | game memory only: one hook on the game's script update, one replaced armor-reward handler (only if its bytes match exactly), one 4 KiB memory page shared with the scripts. Nothing on disk | none |
 | Companion (`rando_companion\RandoCompanion.ps1`) | `rivet.toml`, the `mods` folder and the game's `toc` file (read-only, to detect ARSENAL_RESTORED); the local pipe `\\.\pipe\rivet_hook` | only `rando_companion\randomizer_saves\` (progress, `.bak` copies, `random_seed.txt`, spoiler logs). It deletes only `random_seed.txt`, and only when asked for a new seed | none: the pipe is local to your PC |
 | `Start-Companion.bat` | — | — | runs `RandoCompanion.ps1` with `-ExecutionPolicy Bypass` for that one script; no system setting is changed |
@@ -50,7 +50,7 @@ ZIP. It is not a certification by a third party: please check the source yoursel
 
 ## Review of the release
 
-For v0.60 the player ZIP and this repository were checked for: personal names, user folders and
+For v0.70 the player ZIP and this repository were checked for: personal names, user folders and
 absolute paths; keys, tokens and passwords; network, download and process-launch code; registry
 access; files written outside the game folder; developer tools and debug keys; the developer-only
 randomizers (they stay in the private development repository). None were found in the files

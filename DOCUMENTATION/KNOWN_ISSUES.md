@@ -1,4 +1,4 @@
-# Known issues and compatibility: v0.60 (beta)
+# Known issues and compatibility: v0.70 (beta)
 
 ## Test status: what was checked where
 
@@ -7,8 +7,14 @@
     dev 10.33). 92 enemies were replaced: 64 died, 28 were killed in ways the game does not report
     as a death, and **none was left alive**. Every challenge completed.
   - `rando_give.dll` v7 (the version in this download) since round 32.
+  - Omega weapons: the randomizer set Omega Ricochet in the game and read it back (rounds 52-54),
+    and Omega purchases at Ms. Zurkon were recognized (round 52).
   - Items, shop, armor and planet travel as in earlier releases.
 - **Checked by automated tests only** (a game simulator, not the real game):
+  - **The crash fix of v0.70** (death, checkpoint retry, loading a save): it was found in
+    `rivet_hook`'s source and tested in the simulator; it has not been played in the game yet.
+    If the game still closes when you die, send `rivet.log`: the last `RANDO-LOAD` line shows
+    when it happened.
   - The trip back to Nefarious City **with planet shuffle off** (new in v0.60).
   - Omega weapons' reward and ownership rules.
   - `Install-ArsenalRestored.bat` (its install steps were not run on Windows for this release).
@@ -29,10 +35,11 @@
 
 ## Omega weapons (off by default)
 
-- With `omega_weapons = true`, Omega rewards are placed and recorded correctly, but **the
-  randomizer cannot yet set the Omega upgrade in the game**: it has not found the hero's
-  inventory in any test so far (`RANDO-OMEGA inventory not found` in `rivet.log`). An Omega found
-  before its weapon gives you the weapon; otherwise the reward waits.
+- With `omega_weapons = true`, Omega rewards are placed, recorded **and set in the game**.
+  After every load the randomizer reads your weapons again before it sets anything: wait a few
+  seconds for **Randomizer: Omega ready**. Arena challenges that swap your weapons can delay it.
+- Turning `omega_weapons` on makes a **different seed** from the same seed name.
+- Omegas are never placed on Gold Bolts, Spybots or Lorbs.
 
 ## Back to the hub
 
@@ -54,6 +61,11 @@
   that location, because progress is saved every ~2 seconds.
 - **Planet shuffle:** if a planet's story will not start or a level misbehaves, press 0 to turn
   planet shuffle off; the game then plays its own way and your items stay randomized.
+
+## Updating from v0.60
+
+- With the default settings (`omega_weapons = false`), v0.70 makes the **same seeds** as v0.60.
+  Replace every file of the `scripts` folder with the new ones; your progress is kept.
 
 ## Updating from v0.55
 

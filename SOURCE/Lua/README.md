@@ -1,4 +1,4 @@
-# Lua scripts: v0.60
+# Lua scripts: v0.70
 
 These 16 files go into `<game folder>\scripts`. rivet_hook loads them in name order.
 

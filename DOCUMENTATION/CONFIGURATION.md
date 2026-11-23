@@ -1,4 +1,4 @@
-# Configuration: v0.60
+# Configuration: v0.70
 
 ## Settings file
 
@@ -19,13 +19,13 @@ written to `rivet.log` (search `RANDO-SETTINGS`) and the default is used.
 | `story_milestones` | `true` | each planet's second story mission gives a reward |
 | `side_locations` | `true` | Zurkie's cups, Trudi, the Blizar chef and Ardolis give rewards |
 | `weapons` | `true` | shuffle weapons |
-| `collectibles` | `false` | Spybots and Lorbs hold no rewards in v0.60 (their pickups are not recognized yet) |
+| `collectibles` | `false` | Spybots and Lorbs hold no rewards in v0.70 (their pickups are not recognized yet) |
 | `restored_weapons` | `"auto"` | ARSENAL_RESTORED's weapons: `"auto"` (only if installed), `false` |
 | `gadgets` | `true` | Box Breaker, Omniglove and Glitch are rewards |
 | `armor` | `true` | armor pieces are rewards |
 | `shop` | `"shuffle"` | `"shuffle"` or `"vanilla"` (her usual weapons) |
 | `exclude` | `""` | items never randomized, e.g. `"weapon:ryno_8,armor:pirate_head"` |
-| `omega_weapons` | `false` | `true`: the 20 Omega versions (Challenge Mode / New Game+) become rewards. **Beta**: the Omega upgrade itself is not applied in the game yet ([KNOWN_ISSUES](KNOWN_ISSUES.md)) |
+| `omega_weapons` | `false` | `true`: the 20 Omega versions (Challenge Mode / New Game+) become rewards. Since v0.70 the Omega upgrade is set in the game. Turning it on makes a different seed ([KNOWN_ISSUES](KNOWN_ISSUES.md)) |
 | `start_weapons` | `2` | 0-4 random starting weapons |
 | `start_gadgets` | `1` | 0-2 random starting gadgets |
 | `start_items` | `""` | items you always start with, e.g. `"weapon:enforcer,glitch"` |

@@ -37,12 +37,12 @@
 --      and planet rewards wait for that planet's Coordinates.
 -- Engine calls are wrapped in pcall; errors are logged as RANDO-ERROR and never switch the
 -- randomizer off.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["10_rando_runtime"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["10_rando_runtime"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
 
 RANDO = RANDO or {}
 local R = RANDO
-R.KIT_VERSION = "10.0.23"
-R.RELEASE = "v0.60"                   -- the public release this kit belongs to (the start banner)
+R.KIT_VERSION = "10.0.35"
+R.RELEASE = "v0.70"                  -- the public release this kit belongs to (the start banner)
 local DB = RANDO_DATA
 local GEN = RANDO_GEN
 local BIND = RANDO_BINDINGS or {}
@@ -51,6 +51,65 @@ BIND.mission_prefixes = BIND.mission_prefixes or {}; BIND.collectible_events = B
 
 local function log(...) pcall(rivet.log, "[rando]", ...) end
 R.log = log
+
+-- ---------------------------------------------------------------------------------------
+-- v0.62-DEV14: IS THE GAME LOADING? (the crash on death / retry / load)
+-- rivet_hook runs the scripts mid-frame on the GAME thread. When the game thread stops pumping
+-- for 250 ms - a level load: death, retry, checkpoint, save load, planet travel - rivet_hook
+-- pumps the scripts from the RENDER thread instead (src/game_thread.cpp present_tick, QUIET_MS),
+-- while the game frees and rebuilds the level on its own threads. A read there is checked with
+-- VirtualQuery first, but the game can free the page between that check and the read: a crash
+-- with no error in rivet.log. DEV13 is the first kit whose Omega census walks the whole
+-- component index (tens of thousands of reads per frame) and restarts right after every
+-- checkpoint load - so a death landed in the middle of it. rivet.time_scale() does NOT raise on
+-- the render thread (only setting it does), so 09_rando_real.lua's "loading" check never saw a
+-- load either.
+-- The probe: rivet.script_node(0) answers "nodes can only be read on the game thread, and it is
+-- not pumping (loading?)" off the game thread, before it touches anything; on the game thread
+-- handle 0 is refused at once ("no live component"). Nothing is read or written by it. Builds
+-- without rivet.script_node count as "not loading" (the old behaviour).
+-- A frame that comes 0.25 s or more after the previous one (the render thread taking over, or a
+-- hitch) counts as a load too.
+-- ---------------------------------------------------------------------------------------
+R.LOAD_GAP_SECONDS = 0.25
+R.loading = false                -- this frame: the game thread is not pumping (or just stalled)
+R.load_frames = 0                -- frames of the current load
+R.loads_seen = 0
+R.probe_frame, R.probe_value = -1, false
+function R.loading_now()
+  local f = (rivet.frame and rivet.frame()) or 0
+  if f == R.probe_frame then return R.probe_value end
+  local v = false
+  if type(rivet.script_node) == "function" then
+    local ok, n, why = pcall(rivet.script_node, 0, false)
+    v = ok and n == nil and type(why) == "string" and why:find("game thread", 1, true) ~= nil
+  end
+  R.probe_frame, R.probe_value = f, v
+  return v
+end
+-- once a frame, from the frame callback: sets R.loading and tells the scripts that hold game
+-- addresses across frames (17_rando_omega.lua) to drop them
+function R.update_loading(dt)
+  local now = R.loading_now() or (type(dt) == "number" and dt >= R.LOAD_GAP_SECONDS)
+  if now then
+    if not R.loading then
+      R.loads_seen = R.loads_seen + 1
+      if R.loads_seen <= 40 then
+        log(string.format("RANDO-LOAD a load began (%s) - Omega and the Enemy Randomizer read nothing until it is over",
+            R.loading_now() and "the game thread stopped pumping" or string.format("%.2f s without a frame", dt or 0)))
+      end
+    end
+    R.load_frames = R.load_frames + 1
+    if RANDO_OMEGA and RANDO_OMEGA.on_loading then
+      local ok, err = pcall(RANDO_OMEGA.on_loading)
+      if not ok then log("RANDO-ERROR omega on_loading:", tostring(err)) end
+    end
+  elseif R.loading then
+    if R.loads_seen <= 40 then log(string.format("RANDO-LOAD the load is over (%d frame(s))", R.load_frames)) end
+    R.load_frames = 0
+  end
+  R.loading = now and true or false
+end
 
 -- ---------------------------------------------------------------------------------------
 -- 8.3 keys: ordinary keyboard keys, not only F1-F12. A key setting is a name: one character
@@ -285,7 +344,8 @@ local STATE_TABLES = { "collected", "paid", "banked", "access", "inventory", "st
                        "bolts_seen", "armor_found", "armor_sets_done", "collectibles", "visited",
                        "history", "real", "real_nodes", "tracked", "gadgets_seen", "weapons", "gadgets",
                        "armor_sources", "currency_queue", "shop_given",
-                       "omega", "omega_prereq" }           -- dev 10.15: Omega tier per weapon, prerequisites given
+                       "omega", "omega_prereq",
+                       "collectible_ids" }                 -- v0.62-DEV5: Spybot / Lorb ids already paid this run           -- dev 10.15: Omega tier per weapon, prerequisites given
 local function fill_defaults(s)
   for _, k in ipairs(STATE_TABLES) do s[k] = s[k] or {} end
   s.planets_done = s.planets_done or 0
@@ -413,7 +473,7 @@ function R.grant_omega(key, quiet, prefix)
   local wkey = it.weapon
   local w = wkey:sub(8)
   local wname = item_name(wkey)
-  history("received " .. it.name)
+  -- v0.70: grant() (its only caller) has already logged "received <name>" (round54 showed it twice)
   S.inventory[key] = true
   if S.omega[w] then
     changed()
@@ -703,7 +763,24 @@ end
 -- armor: 13_rando_armor.lua (armor sources, and the vanity_owns polling fallback)
 
 -- collectibles bound in 05_rando_bindings.lua: { spybot = { class = "<event class>" }, ... }
-function R.on_collectible(kind)
+-- v0.62-DEV5: id = the event's own id of that collectible (RynoId / RuinId): one Spybot pays once per run, however
+-- many events the game sends for it (RYNOPlayPickedUpEvent and RYNOScriptPickupEvent can both come). Without an id,
+-- a second event of the same kind within R.COLLECT_DEBOUNCE frames is the same pickup.
+R.COLLECT_DEBOUNCE = 90
+local last_collect = {}
+function R.on_collectible(kind, id, from_event)
+  if id ~= nil and id ~= "" and id ~= 0 then
+    local key = tostring(id)
+    if key == "None" or key == "245637737" then return end              -- the enums' None (0x0EB42269)
+    S.collectible_ids[kind] = S.collectible_ids[kind] or {}
+    if S.collectible_ids[kind][key] then return end
+    S.collectible_ids[kind][key] = true
+  elseif from_event then
+    local f = rivet.frame and rivet.frame() or 0
+    if last_collect[kind] and f - last_collect[kind] < R.COLLECT_DEBOUNCE then return end
+    last_collect[kind] = f
+  end
+  log("RANDO-COLLECTIBLE", kind, tostring(id or "-"))
   S.collectibles[kind] = (S.collectibles[kind] or 0) + 1
   changed()
   local n = S.collectibles[kind]
@@ -1215,10 +1292,15 @@ end)
 -- collectibles bound by event class (05_rando_bindings.lua)
 for _, kind in ipairs(GEN.sorted_keys(BIND.collectible_events)) do
   local b = BIND.collectible_events[kind]
-  if type(b) == "table" and type(b.class) == "string" then
-    on(b.class, function(ev)
-      if b.field and b.value ~= nil and (ev.fields or {})[b.field] ~= b.value then return end
-      R.on_collectible(kind)
+  -- v0.62-DEV5: b.classes (several event classes for one pickup) and b.id_field (dedupe by the collectible's id)
+  local classes = {}
+  if type(b) == "table" and type(b.class) == "string" then classes[1] = b.class end
+  if type(b) == "table" and type(b.classes) == "table" then for _, c in ipairs(b.classes) do classes[#classes + 1] = c end end
+  for _, cls in ipairs(classes) do
+    on(cls, function(ev)
+      local f = ev.fields or {}
+      if b.field and b.value ~= nil and f[b.field] ~= b.value then return end
+      R.on_collectible(kind, b.id_field and f[b.id_field] or nil, true)
     end)
   end
 end
@@ -1366,6 +1448,27 @@ function R.kit_check()
   end
   table.sort(dev); table.sort(stale)
   if #dev > 0 then log("RANDO-KIT developer files loaded (diagnostics, not part of a release - remove them for normal play): " .. table.concat(dev, ", ")) end
+  -- v0.62-DEV7: round47 copied DEV6's dev(debug).lua (10.0.26) but kept DEV5's scripts (10.0.25) and was told to delete
+  -- the NEW file. A developer file newer than the scripts means the scripts folder was not replaced.
+  local function newer(v)
+    local a, b = {}, {}
+    for n in tostring(v or ""):gmatch("%d+") do a[#a + 1] = tonumber(n) end
+    for n in tostring(R.KIT_VERSION):gmatch("%d+") do b[#b + 1] = tonumber(n) end
+    for i = 1, math.max(#a, #b) do
+      if (a[i] or 0) ~= (b[i] or 0) then return (a[i] or 0) > (b[i] or 0) end
+    end
+    return false
+  end
+  local newest
+  for f, v in pairs(files) do if f:sub(1, 4) == "dev(" and newer(v) and (not newest or newer(v)) then newest = v end end
+  if newest then
+    log("RANDO-ERROR RANDO-KIT the scripts folder is OLDER than its developer file(s): kit " .. R.KIT_VERSION ..
+        ", developer file " .. tostring(newest) .. " - copy the WHOLE scripts folder of kit " .. tostring(newest) ..
+        " over this one (only dev(debug).lua was replaced)")
+    say("Randomizer: your scripts are kit " .. R.KIT_VERSION .. " but dev(debug).lua is " .. tostring(newest) ..
+        " - copy the whole new scripts folder", { type = "center", duration = 12 })
+    stale = {}
+  end
   if #stale > 0 then
     log("RANDO-ERROR RANDO-KIT delete from the scripts folder: " .. table.concat(stale, ", ") ..
         " - an old developer file (developer tools are in the kit's dev_scripts folder now and never needed to play)")
@@ -1469,12 +1572,15 @@ local function frame(dt)
     local okv, ev = pcall(RANDO_SHOP.tick, frames)
     if not okv then log("RANDO-ERROR shop:", tostring(ev)) end
   end
+  -- v0.62-DEV14: the two scripts that walk the game's component memory over many frames read
+  -- nothing while the game is loading (R.update_loading)
+  local walk_ready = ready and not R.loading
   if RANDO_SPAWNERS and RANDO_SPAWNERS.tick then
-    local oks, es = pcall(RANDO_SPAWNERS.tick, frames, ready)
+    local oks, es = pcall(RANDO_SPAWNERS.tick, frames, walk_ready)
     if not oks then log("RANDO-ERROR spawners:", tostring(es)) end
   end
   if RANDO_OMEGA and RANDO_OMEGA.tick then
-    local oko, eo = pcall(RANDO_OMEGA.tick, frames, ready)
+    local oko, eo = pcall(RANDO_OMEGA.tick, frames, walk_ready)
     if not oko then log("RANDO-ERROR omega:", tostring(eo)) end
   end
   if not announced and ready then
@@ -1488,6 +1594,12 @@ local function frame(dt)
 end
 local frame_errors = 0
 pcall(rivet.on_frame, function(dt)
+  R.frame_t0 = (os and os.clock and os.clock()) or 0     -- v0.62-DEV8: how much of the 8 ms budget is left (17_rando_omega.lua)
+  local okl, el = pcall(R.update_loading, dt)             -- v0.62-DEV14: before anything reads the game
+  if not okl then
+    frame_errors = frame_errors + 1
+    if frame_errors <= 5 then log("RANDO-ERROR loading check:", tostring(el)) end
+  end
   local ok, err = pcall(frame, dt)
   if not ok then
     frame_errors = frame_errors + 1

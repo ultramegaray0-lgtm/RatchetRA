@@ -46,7 +46,7 @@
 --     from their own queue (G.give_currency); nothing is retried once the game took the message
 --   * G.lookup_config asks the helper where a loaded config lives (kind 7, read only), for the
 --     shop (12_rando_shop.lua)
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["09_rando_real"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["09_rando_real"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_REAL = RANDO_REAL or {}
 local G = RANDO_REAL
@@ -842,6 +842,12 @@ end
 -- menu that stops time reads (close to) 0. Builds of rivet_hook without time_scale skip this.
 G.ts_errors = 0
 function G.game_running()
+  -- v0.62-DEV14: rivet.time_scale() does not raise on the render thread after all (only setting it does), so a load
+  -- read as "running" and a give could go out mid-load. 10_rando_runtime.lua's probe tells a load apart.
+  if RANDO and RANDO.loading_now then
+    local okl, loading = pcall(RANDO.loading_now)
+    if okl and loading then return false end
+  end
   if type(rivet.time_scale) ~= "function" then return true end
   local ok, v = pcall(rivet.time_scale)
   if not ok then
@@ -860,6 +866,11 @@ function G.on_frame()
   G.frame = G.frame + 1
   local running = G.game_running()
   if running then G.gframe = G.gframe + 1 end
+  -- v0.62-DEV14: the wait after a load starts when the load is over, not when it began
+  if not running and RANDO and RANDO.loading_now then
+    local okl, loading = pcall(RANDO.loading_now)
+    if okl and loading then G.settle_until = math.max(G.settle_until or 0, G.frame + G.SETTLE_FRAMES) end
+  end
   if G.burst and G.frame >= G.burst.ends then end_burst() end
   local u = G.last_unknown
   if u and G.frame - u.frame > G.NAME_FRAMES then

@@ -4,12 +4,12 @@ A randomizer for the PC version of **Ratchet & Clank: Rift Apart**. Weapons, gad
 planet Coordinates are shuffled across Gold Bolts, story missions, side activities, armor pods
 and Ms. Zurkon's shop. A solver checks every seed before you play, so it can always be finished.
 
-Unofficial fan mod. **Current version: v0.60 (beta).**
+Unofficial fan mod. **Current version: v0.70 (beta).**
 
 ## Download (players)
 
-**[Download Ratchet_Rift_Apart_Randomizer_v0.60_Player_Release.zip](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/download/v0.60/Ratchet_Rift_Apart_Randomizer_v0.60_Player_Release.zip)**
-(release page with notes and checksum: [v0.60](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/tag/v0.60)).
+**[Download Ratchet_Rift_Apart_Randomizer_v0.70_Player_Release.zip](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/download/v0.70/Ratchet_Rift_Apart_Randomizer_v0.70_Player_Release.zip)**
+(release page with notes and checksum: [v0.70](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/tag/v0.70)).
 Older releases stay available on the [releases page](https://github.com/ultramegaray0-lgtm/RatchetRA/releases).
 
 The player ZIP is all you need. The files in this repository are the **source code**, for
@@ -50,7 +50,10 @@ Full steps, updating and uninstalling: [INSTALLATION](DOCUMENTATION/INSTALLATION
   shuffle on **and** off (new in v0.60).
 - **Enemy Randomizer** (new in v0.60, on by default, **-** in game): regular enemies become other
   regular enemies loaded on the same level; a replacement that cannot be killed is put back.
-- **Omega weapons** (new in v0.60, beta, off by default): the 20 Omega versions as rewards.
+- **Omega weapons** (beta, off by default): the 20 Omega versions as rewards. Since v0.70 the
+  reward really turns your weapon into its Omega version in the game.
+- **v0.70:** no more crash when you die, retry a checkpoint or load a save (see
+  [RELEASE_NOTES](RELEASE_NOTES.md)).
 - **ARSENAL_RESTORED launcher:** `rando_companion\Install-ArsenalRestored.bat` installs that mod's
   rivet_hook version.
 - Fixed or random seeds, presets, a spoiler log, and progress saved per seed by the companion.

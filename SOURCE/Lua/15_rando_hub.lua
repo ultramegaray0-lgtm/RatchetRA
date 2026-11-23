@@ -46,12 +46,12 @@
 --     whose first visit is open is played there (hub_follow_new), not undone.
 -- Frame guards (after a finish, after the hub start) count frames of this session only.
 -- The developer keys (] [ /) are bound by dev(keys).lua; this file only provides their actions.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["15_rando_hub"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["15_rando_hub"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
 RANDO_HUB = RANDO_HUB or {}
 local H = RANDO_HUB
 local C = RANDO_CAMPAIGN
 local DB = RANDO_DATA
-H.VERSION = "10.0.23"
+H.VERSION = "10.0.35"
 
 local function log(...) pcall(rivet.log, "[rando]", "RANDO-HUB", ...) end
 local function S() return RANDO and RANDO.state end
@@ -1597,11 +1597,17 @@ function H.on_menu_accept(f)
               (RANDO_TRAVEL.planet_of_checkpoint(dest) or RANDO_TRAVEL.planet_of_checkpoint(f.InterplanetaryCheckpointName))
   H.menu = { planet = pid, dest = dest, at = now() }
   log("planet menu:", tostring(dest), "->", tostring(pid))
-  -- v0.60: planet shuffle off - your own flight with the ship's planet menu replaces a trip back that still waits
-  -- (with planet shuffle on, the launch of the flight's destination cancels it the same way)
-  if H.return_at and not H.enabled() and pid ~= H.plan().planet then
+  -- v0.61 repair: an accepted ship-menu choice replaces the pending automatic return in BOTH
+  -- shuffle modes. Previously shuffle ON relied on launch_dest to clear return_at after landing;
+  -- the timer could expire during the flight and send the player to the hub first (a double trip).
+  -- v0.62-DEV5: ... and also when the menu's destination could not be placed on a planet (pid nil: a landing
+  -- checkpoint the catalog does not know). The v0.61 repair required a known planet, so an unplaced destination kept
+  -- the 12 s timer running and the player was warped back to Nefarious City right after landing on the planet they
+  -- chose (test_v060 / test_v055 "the game's order with shuffle off": Zurkon -> Nefarious City). Only a flight TO the
+  -- trip's own planet (Nefarious City) keeps it.
+  if H.return_at and pid ~= H.plan().planet then
     H.return_at = nil
-    log("planet menu while the trip back waited - you fly on yourself; no trip back to the hub")
+    log("planet menu while the trip back waited -> " .. tostring(pid or dest) .. "; automatic trip back cancelled")
   end
   -- dev 10.11: a visit not made active yet is made active now, while the ship is in the tunnel
   local s = S()

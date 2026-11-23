@@ -1,4 +1,4 @@
-# Third-party notices and credits: v0.60
+# Third-party notices and credits: v0.70
 
 ## This mod
 

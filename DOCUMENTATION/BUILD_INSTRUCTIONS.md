@@ -1,4 +1,4 @@
-# Build instructions: v0.60
+# Build instructions: v0.70
 
 Only one part of the mod is compiled: `rando_give.dll`. Everything else (Lua scripts, companion,
 `rivet.toml`) is used as it is in this repository.
@@ -21,7 +21,7 @@ runtime, on Linux (or WSL) with LLVM.
    Expected: `8055703e7dd7f48e16aa5a081d6795c15d515a52802bd0d70aafe88b54640744` (v7).
 
 The build is reproducible: the link timestamp is fixed in `build.sh`. A clean build from this
-repository with clang/lld 18.1.3 was compared with the v0.60 player ZIP's DLL and is
+repository with clang/lld 18.1.3 was compared with the v0.70 player ZIP's DLL and is
 byte-identical.
 
 ## The player ZIP

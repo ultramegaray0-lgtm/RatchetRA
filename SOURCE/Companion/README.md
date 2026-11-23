@@ -1,4 +1,4 @@
-# Companion: v0.60
+# Companion: v0.70
 
 Goes into `<game folder>\rando_companion`. Start `Start-Companion.bat` before the game and keep
 its window open. It talks to the game through rivet_hook's local pipe, saves randomizer progress

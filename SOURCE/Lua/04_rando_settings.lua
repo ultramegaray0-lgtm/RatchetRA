@@ -4,7 +4,7 @@
 -- NEW seed with its own progress: start it with New Game. Lines starting with -- are notes; to
 -- change an option, remove the -- in front of it and edit the value. A wrong value is reported in
 -- rivet.log (search RANDO-SETTINGS) and the default is used instead.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["04_rando_settings"] = "10.0.23"   -- version check (do not edit)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["04_rando_settings"] = "10.0.35"   -- version check (do not edit)
 RANDO_SETTINGS = {
   -- THE SEED: "random" = the companion picks one and remembers it. Any other text is a fixed seed
   -- (the same text and settings give the same seed on every PC), e.g. "lombax-ryno-2026".
@@ -39,9 +39,8 @@ RANDO_SETTINGS = {
   omega_weapons = false,               -- OMEGA WEAPONS (for Challenge Mode / New Game+), OFF by default.
                                        -- true: the 20 Omega versions become rewards of their own. An Omega found
                                        -- first also gives its weapon; the weapon found later never undoes the Omega.
-                                       -- BETA: in v0.60 the randomizer cannot yet set the Omega upgrade in the game
-                                       -- itself - an Omega reward gives the weapon if you lack it, and is otherwise
-                                       -- only recorded (see KNOWN_ISSUES).
+                                       -- v0.70: the Omega upgrade is set in the game itself (seen working in the
+                                       -- developer's game). Turning this on makes a different seed (see KNOWN_ISSUES).
 
   -- YOUR START (Hoverboots and Map-O-Matic are always included)
   -- start_weapons = 2,                -- 0-4 random weapons

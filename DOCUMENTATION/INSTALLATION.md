@@ -1,6 +1,6 @@
-# Installation: Rift Apart Randomizer v0.60
+# Installation: Rift Apart Randomizer v0.70
 
-> Download the player ZIP from the [v0.60 release](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/tag/v0.60). These steps refer to its `GAME_FOLDER` folder.
+> Download the player ZIP from the [v0.70 release](https://github.com/ultramegaray0-lgtm/RatchetRA/releases/tag/v0.70). These steps refer to its `GAME_FOLDER` folder.
 
 About 10 minutes. No programming tools needed.
 

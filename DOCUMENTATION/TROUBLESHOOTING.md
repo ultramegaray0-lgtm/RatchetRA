@@ -1,4 +1,4 @@
-# Troubleshooting: Rift Apart Randomizer v0.60
+# Troubleshooting: Rift Apart Randomizer v0.70
 
 Most answers are in `rivet.log` in the game folder. Open it with Notepad and search for `RANDO-`.
 `RANDO-ERROR` lines say what went wrong.
@@ -98,5 +98,5 @@ directly instead.
 
 ## Reporting a problem
 
-Include the mod version (v0.60), your game version, what you did, and `rivet.log`. Replace your
+Include the mod version (v0.70), your game version, what you did, and `rivet.log`. Replace your
 Windows user name in any paths in the log before you post it.

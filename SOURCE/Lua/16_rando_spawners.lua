@@ -52,7 +52,7 @@
 -- the slot must hold what was written, a write is read back, refused writes are not repeated, and a
 -- Templates list two nodes share is not written. When Chaos is switched OFF its slots go back to their
 -- originals and the Enemy / Boss Randomizers plan again from their own settings.
-RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["16_rando_spawners"] = "10.0.23"   -- the kit check (10_rando_runtime.lua)
+RANDO_FILES = RANDO_FILES or {}; RANDO_FILES["16_rando_spawners"] = "10.0.35"   -- the kit check (10_rando_runtime.lua)
 
 RANDO_SPAWNERS = RANDO_SPAWNERS or {}
 local SP = RANDO_SPAWNERS
@@ -1597,6 +1597,11 @@ V.ADAPTER_LABEL = { factory = "factory Templates", template = "node Template", g
 V.FAMILY_GROUP = { ground = "walker", swarmer = "walker", turret = "turret", flyer = "flyer" }
 -- names that are never an enemy to change or to use, whatever their bot class says
 V.NAME_EXCLUDE = { "npc_", "boss", "ally", "friend", "civ_", "vendor", "dummy", "test_", "infobot", "sheep", "lemming" }
+-- v0.62-DEV5: bot classes whose SPAWNERS may change but which are never a REPLACEMENT, with the movement group their
+-- spawn points can take. Round45 (Ardolis): pool sharks became walkers' replacements ("enm_indigenous_crab ->
+-- enm_indigenous_poolshark") - a pool shark lives in water; on a walkway it cannot reach the player (the encounter at
+-- CE7854747136D250 went "stuck" 180 s). A pool shark's spawn point is over water: only a flyer is safe there.
+V.SOURCE_ONLY = { GameBotPoolShark = "flyer" }
 
 local function u16(b, i) if not (b and b[i + 1]) then return nil end return b[i] + b[i + 1] * 0x100 end
 local function le32(v) return string.format("%02X %02X %02X %02X", v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF) end
@@ -1865,6 +1870,195 @@ V.REG_BUILTIN = {
   ["93F81D58CE0170AF"] = "enm_neo_nefarious_grenadier|flyer|GameBotShooterJetPackNoFiring|enemy", -- Cordelion
   ["D5C79D3A26DF1EB9"] = "enm_amoeboid_small_ps4|swarmer|GameBotAmoeboid|enemy",             -- Cordelion
   ["A49ABC9129557DC6"] = "enm_indigenous_puffoid|swarmer|GameBotMeleeSwarmer|enemy",          -- Cordelion
+  -- v0.61-DEV3 live-game census: 112 further enemy template UIDs from rivet(3).log.
+  -- Only known enemy movement families are included; unclear Pool Sharks, bosses and friendlies are excluded.
+  -- These entries let factory/node Templates be classified before their first spawn. The UID/name evidence is
+  -- game-observed; it does NOT imply that every original/replacement pair is combat-compatible.
+  ["80C6BBFA2E6E4039"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["80E0E5BC8EBD2387"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["817295549027E6A0"] = "enm_pirate_bladeball|swarmer|GameBotMeleeSwarmer|enemy",
+  ["826CDDA6EAFCCCE0"] = "enm_indigenous_crab|swarmer|GameBotMeleeSwarmer|enemy",
+  ["82A9B65DDBA84005"] = "enm_indigenous_puffoid_blizar|swarmer|GameBotMeleeSwarmer|enemy",
+  ["830A36CB5C589241"] = "enm_pirate_robot_shielded|swarmer|GameBotMeleeSwarmer|enemy",
+  ["83E4A8BD6D10ADF2"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["83F96C5473651531"] = "enm_thugs4less_robomutt|swarmer|GameBotMeleeSwarmer|enemy",
+  ["83FCDDA91576A775"] = "enm_amoeboid_small_ps4|swarmer|GameBotAmoeboid|enemy",
+  ["845B33095275FBC9"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["8512D3A8FADBD190"] = "enm_indigenous_crab|swarmer|GameBotMeleeSwarmer|enemy",
+  ["87A247F131E576AB"] = "enm_amoeboid_large_ps4|swarmer|GameBotAmoeboid|enemy",
+  ["88D6487365D1FC1B"] = "enm_pirate_shingle_q4b|swarmer|GameBotMeleeSwarmer|enemy",
+  ["899C303E911F9792"] = "enm_indigenous_puffoid_blizar|swarmer|GameBotMeleeSwarmer|enemy",
+  ["8B7D92A085EA16E5"] = "enm_thugs4less_biker|flyer|GameBotShooterJetPack|enemy",
+  ["8BB119D194E003C4"] = "enm_thugs4less_biker|flyer|GameBotShooterJetPack|enemy",
+  ["8C4B40BBB2621EB7"] = "enm_neo_nefarious_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["8CB6FA39A983F747"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["8D626754AA04F77C"] = "enm_neo_nefarious_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["8E7380B88E965A88"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["8EE65D77464F568D"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["9070B46C6C14744E"] = "enm_indigenous_sandshark|swarmer|GameBotMeleeSwarmerBurrower|enemy",
+  ["92090815E84D9784"] = "enm_thugs4less_biker|flyer|GameBotShooterJetPack|enemy",
+  ["946521C29EC2B740"] = "enm_neo_nefarious_hover|flyer|GameBotShooterJetPack|enemy",
+  ["95B841DDB63F1076"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["990F0CF7CFAA99DF"] = "enm_indigenous_crab|swarmer|GameBotMeleeSwarmer|enemy",
+  ["9A6886425423678B"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["A0F33A142362145C"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["A11B9447CAC96847"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["A131D42EFECA9825"] = "enm_thugs4less_shooter|ground|GameBotShooter|enemy",
+  ["A30790FA2CD8CAA8"] = "enm_thugs4less_shooter|ground|GameBotShooter|enemy",
+  ["A32C29D745C1071B"] = "enm_indigenous_crab|swarmer|GameBotMeleeSwarmer|enemy",
+  ["A4086883A1A19113"] = "enm_neo_nefarious_grenadier|flyer|GameBotShooterJetPackNoFiring|enemy",
+  ["A4115462BB78CA65"] = "enm_amoeboid_medium_ps4|swarmer|GameBotAmoeboid|enemy",
+  ["A6DC4E39C9222BDB"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["A947C2837C809670"] = "enm_indigenous_hornedtoad|swarmer|GameBotMeleeSwarmerJumper|enemy",
+  ["AD2C679116DFBBAB"] = "enm_indigenous_hornedtoad|swarmer|GameBotMeleeSwarmerJumper|enemy",
+  ["AD408B82FC75747F"] = "enm_neo_nefarious_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["AEF0F74F34EAF9BE"] = "enm_thugs4less_biker|flyer|GameBotShooterJetPack|enemy",
+  ["AF5B3BB8BF806FCC"] = "enm_indigenous_sandshark|swarmer|GameBotMeleeSwarmerBurrower|enemy",
+  ["AFE5E725B33D1BE2"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["B094CA9791DD071E"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["B098A7832EDE64AB"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["B0E8DA3F3D97FAFB"] = "enm_neo_nefarious_hover|flyer|GameBotShooterJetPack|enemy",
+  ["B18D3873315CB864"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["B1CC8707C5FCF97F"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["B51EC8FDD7611AD0"] = "enm_indigenous_hornedtoad|swarmer|GameBotMeleeSwarmerJumper|enemy",
+  ["B55799EA1763D5DE"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["B7E73FAFB7050D23"] = "enm_indigenous_crab|swarmer|GameBotMeleeSwarmer|enemy",
+  ["B7F277D53288DCE0"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["B866B5B9831DA9FD"] = "enm_thugs4less_biker|flyer|GameBotShooterJetPack|enemy",
+  ["B8E7F90C7DBF137C"] = "enm_thugs4less_shooter|ground|GameBotShooter|enemy",
+  ["BA76AFF5712E980C"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["BA90CDA823EAABA3"] = "enm_indigenous_sandshark|swarmer|GameBotMeleeSwarmerBurrower|enemy",
+  ["BC530EDC36516D44"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["BCC5D8017879250F"] = "enm_thugs4less_shooterjetpack|flyer|GameBotShooterJetPack|enemy",
+  ["BE9353FE4F2FF70A"] = "enm_indigenous_crab|swarmer|GameBotMeleeSwarmer|enemy",
+  ["BEA88F589F01883A"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["BED4DC3E0BBE62BD"] = "enm_amoeboid_small_ps4|swarmer|GameBotAmoeboid|enemy",
+  ["BEFDACAEE050D868"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["C00534272C294646"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["C526EC5AC2659D09"] = "enm_indigenous_wasp|flyer|GameBotShooterJetPack|enemy",
+  ["C64A13BA6A651CD1"] = "enm_indigenous_hornedtoad|swarmer|GameBotMeleeSwarmerJumper|enemy",
+  ["C6C86521D361FBDD"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["C848262653E31B49"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["C914DE8A96038411"] = "enm_neo_nefarious_hover|flyer|GameBotShooterJetPack|enemy",
+  ["CA2C47B038397AEF"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["CB6AB63B9E89E560"] = "enm_indigenous_crab|swarmer|GameBotMeleeSwarmer|enemy",
+  ["CD3EE9DE7D95E806"] = "enm_indigenous_hornedtoad|swarmer|GameBotMeleeSwarmerJumper|enemy",
+  ["CD9BAE491F79963B"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["CEB0F68C49E19121"] = "enm_neo_nefarious_hover|flyer|GameBotShooterJetPack|enemy",
+  ["CF61917F6DC5F11E"] = "enm_indigenous_sandshark|swarmer|GameBotMeleeSwarmerBurrower|enemy",
+  ["CF98B4DCB535188F"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["CFBE6E84F9A51A0C"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["D10BC221645BFD58"] = "enm_amoeboid_large_ps4|swarmer|GameBotAmoeboid|enemy",
+  ["D1270AB204FEC57D"] = "enm_pirate_bladeball|swarmer|GameBotMeleeSwarmer|enemy",
+  ["D14D259E246DCC53"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["D2A65C429AC2B1EB"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["D2C1369C79A26B38"] = "enm_neo_nefarious_sniper|flyer|GameBotShooterJetPackNoFiring|enemy",
+  ["D2FC368F0772D720"] = "enm_indigenous_hornedtoad|swarmer|GameBotMeleeSwarmerJumper|enemy",
+  ["D356093512EC2B50"] = "enm_indigenous_wasp|flyer|GameBotShooterJetPack|enemy",
+  ["D5DD4BE711ACB017"] = "enm_thugs4less_biker|flyer|GameBotShooterJetPack|enemy",
+  ["D7B41C0F7E18044C"] = "enm_pirate_shingle_q4b|swarmer|GameBotMeleeSwarmer|enemy",
+  ["D8C28DCCBC0624E2"] = "enm_indigenous_hornedtoad|swarmer|GameBotMeleeSwarmerJumper|enemy",
+  ["D93D9C507C8226E2"] = "enm_amoeboid_medium_ps4|swarmer|GameBotAmoeboid|enemy",
+  ["D9E2BAF793A1DF49"] = "enm_neo_nefarious_heavy|swarmer|GameBotMeleeSwarmer|enemy",
+  ["DAA2BB522DA7E030"] = "enm_neo_nefarious_sniper|flyer|GameBotShooterJetPackNoFiring|enemy",
+  ["E01F832C5FA9BD4E"] = "enm_indigenous_wasp|flyer|GameBotShooterJetPack|enemy",
+  ["E0294B45E295AAEC"] = "enm_pirate_robot_shielded|swarmer|GameBotMeleeSwarmer|enemy",
+  ["E1030A2D578DEF12"] = "enm_neo_nefarious_sniper|flyer|GameBotShooterJetPackNoFiring|enemy",
+  ["E1BC0F5E90DA4EA1"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["E1CF2CE2042B2E64"] = "enm_neo_nefarious_sniper|flyer|GameBotShooterJetPackNoFiring|enemy",
+  ["E20BD0AE7E562126"] = "enm_neo_nefarious_hover|flyer|GameBotShooterJetPack|enemy",
+  ["E2F34819A2DDD929"] = "enm_neo_nefarious_hover|flyer|GameBotShooterJetPack|enemy",
+  ["E474FED666EA7524"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["E4D7AA327D1DC2C0"] = "enm_neo_nefarious_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["E70B6E49309F2A1B"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["E7A3C8E4AF2EC2AC"] = "enm_pirate_shingle_q4b|swarmer|GameBotMeleeSwarmer|enemy",
+  ["E7BA8EFB907C4F35"] = "enm_neo_nefarious_sniper|flyer|GameBotShooterJetPackNoFiring|enemy",
+  ["EA8973A67DAA82EE"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["EE152B99ED6CD1C3"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["EE8015B483702EDA"] = "enm_thugs4less_shooter|ground|GameBotShooter|enemy",
+  ["EED8E1BB7FE89527"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["F03DDACC8F27D113"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["F40257E5C3906D69"] = "enm_indigenous_wasp|flyer|GameBotShooterJetPack|enemy",
+  ["F74413F4AA44206D"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["F90DF127C3FE626E"] = "enm_indigenous_hornedtoad|swarmer|GameBotMeleeSwarmerJumper|enemy",
+  ["F9D4BE7506D2C9BF"] = "enm_neo_nefarious_hover|flyer|GameBotShooterJetPack|enemy",
+  ["FA25BEFF3BB6DE11"] = "enm_neo_nefarious_grenadier|flyer|GameBotShooterJetPackNoFiring|enemy",
+  ["FB1279838DDB29CD"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["FE024E8760FC8A26"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["FFE6B3449B65FCC4"] = "enm_neo_nefarious_hover|flyer|GameBotShooterJetPack|enemy",
+  -- v0.62-DEV5: every further enemy / boss template uid of the logs in tests/data (round45 included), harvested by
+  -- tools/harvest_enemy_uids.py (one kind in every log, never MIXED). Round45 changed 6 of 68 Ardolis spawns: 49 were
+  -- "kind not known yet" - the pool sharks, bladeballs, robot shooters and crabs of THESE uids. Pool sharks are
+  -- classified so their spawners are known (they only take flyers and are never a replacement: V.SOURCE_ONLY).
+  ["843893C844A302DD"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["89E24906DAD1B2CD"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["8E76954EEF111DD6"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["904A55B56664D80C"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["948B38F1D65C42B1"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["94C4FB44D9DFA996"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["956444556E03E7DF"] = "enm_indigenous_poolsh|unclear|GameBotPoolShark|enemy",
+  ["99CBD30445460E36"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["9D63B938DA263103"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["A37714DFEE07879D"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["A61554865DA41264"] = "enm_indigenous_grun|large|GameBotGrunthor|boss",
+  ["A7D580A815B5D5E1"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["A87D764ABCB45594"] = "enm_indigenous_puffoid|swarmer|GameBotMeleeSwarmer|enemy",
+  ["A96882656E9DC244"] = "veh_thug_dropship|large|GameBotShooterArmoredTransport|boss",
+  ["B0E48C76F60DA71C"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["B255B66433EE387C"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["B2C408D5A297EC03"] = "enm_indigenous_puffoid|swarmer|GameBotMeleeSwarmer|enemy",
+  ["B4B1F7CBBF8ADB27"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["B69126A98EF2E190"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["BA312C9E31A934D2"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["BF3586A9B2237B4D"] = "enm_pirate_robot_shielded|swarmer|GameBotMeleeSwarmer|enemy",
+  ["C300DE595CD2CF66"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["C3AAA6FCDD0D17AE"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["C76256DD782A0A50"] = "enm_amoeboid_large_ps4|swarmer|GameBotAmoeboid|enemy",
+  ["C7EA08EF4FE58B6D"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["CFC26C21F2B461B9"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["D1086548D13C6A86"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["D573FD6C7356185A"] = "enm_pirate_bladeball|swarmer|GameBotMeleeSwarmer|enemy",
+  ["D5C46DE36F6BB88E"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["D78BDDE784EF233E"] = "enm_amoeboid_medium_ps4|swarmer|GameBotAmoeboid|enemy",
+  ["D883EE626BDCB8A5"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["D8FB0C5791010A9A"] = "enm_indigenous_grun|large|GameBotGrunthor|boss",
+  ["DA549D2B38D986A2"] = "enm_indigenous_crab|swarmer|GameBotMeleeSwarmer|enemy",
+  ["DB45C9F28C55DD1C"] = "enm_amoeboid_small_ps4|swarmer|GameBotAmoeboid|enemy",
+  ["DBFB087A6A1FD873"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["DCD7D4C55E86C304"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["E2E11A6AE8D3D2BA"] = "enm_indigenous_poolsh|unclear|GameBotPoolShark|enemy",
+  ["E56BC39B2417709E"] = "enm_pirate_robot_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["E5A69D6EE6EE88DE"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["EB73797E03E49D93"] = "enm_indigenous_poolsh|unclear|GameBotPoolShark|enemy",
+  ["EC937BD706908861"] = "enm_pirate_robot_shooter|ground|GameBotShooter|enemy",
+  ["EE401CEA09A21400"] = "enm_indigenous_poolsh|unclear|GameBotPoolShark|enemy",
+  ["EE639E87045E1858"] = "veh_p|large|GameBotShooterArmoredTransport|boss",
+  ["EF341335937C5543"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["F04A2D2555D771D9"] = "enm_thugs4less_shoo|flyer|GameBotShooterJetPack|enemy",
+  ["F2DBBF9820F4583C"] = "enm_thugs4less_shoo|ground|GameBotShooter|enemy",
+  ["F3F37777F90C5D3D"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["F58BC7AEB0CEAC97"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["F59DA44E48BF9954"] = "enm_indigenous_puffoid|swarmer|GameBotMeleeSwarmer|enemy",
+  ["F769B1C21E48ADB3"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["FB26C03A606561EA"] = "enm_indigenous_poolshark|unclear|GameBotPoolShark|enemy",
+  ["FCF742C70CB0FC98"] = "enm_indigenous_crab|swarmer|GameBotMeleeSwarmer|enemy",
+  ["FF3A1B8465229CC2"] = "enm_pirate_bladeball|swarmer|GameBotMeleeSwarmer|enemy",
+  -- v0.62-DEV6: round46 (DEV5 in the game, Nefarious City story) - tools/harvest_enemy_uids.py
+  ["821C3FE9B6442A4C"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["94CF97FD0E5A889C"] = "enm_neo_nefarious_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["9871F2E07574465B"] = "enm_thugs4less_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["9A80C9973BC5E67A"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["A622B1F52B78F34B"] = "enm_indigenous_sandshark|swarmer|GameBotMeleeSwarmerBurrower|enemy",
+  ["ADDEDA2F8C84551E"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["B2425BABFAF8773A"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["B35EB0CF8C7ABC93"] = "enm_neo_nefarious_swarmer|swarmer|GameBotMeleeSwarmer|enemy",
+  ["C902F57609DFC35D"] = "enm_thugs4less_shooter|ground|GameBotShooter|enemy",
+  ["CA3F1B7506A93E9E"] = "enm_thugs4less_shooter|ground|GameBotShooter|enemy",
+  ["CB9B101E739C0B0A"] = "enm_neo_nefarious_melee|swarmer|GameBotMeleeSwarmer|enemy",
+  ["D45AF4FCC5A6FF82"] = "veh_thug_dropship|large|GameBotShooterArmoredTransport|boss",
+  ["D64B49443C3246E4"] = "veh_thug_dropship_shooter|large|GameBotShooterArmoredTransport|boss",
+  ["F04DE470088CD346"] = "enm_neo_nefarious_shooter|ground|GameBotShooterNoFiring|enemy",
+  ["FBEC48BA70BCAB89"] = "veh_thug_dropship|large|GameBotShooterArmoredTransport|boss",
 }
 -- every uid the registry knows (the save's and the built-in ones)
 function V.reg_uids()
@@ -1899,6 +2093,7 @@ function V.reg_put(uid, T)
     if n >= V.REG_CAP then return end
   end
   R_[uid] = v
+  V._reg_n = (V._reg_n or 0) + 1                                           -- v0.62-DEV5: V.kind_by_name rebuilds
   if RANDO and RANDO.mark_changed then RANDO.mark_changed() end
 end
 
@@ -1966,6 +2161,8 @@ V.COMPAT_BUILTIN = {
     "round40: the player could not kill them; 16 spawned, 8 of 8 (run 1) and 7 of 8 (run 2) never died" },
   ["factory|enm_pirate_robot_me/swarmer>enm_pirate_robot_sh/ground"] = { "bad",
     "the same direction as round40's failure (a melee swarmer factory given the robot shooter); round40: the game ignored it once" },
+  ["factory|enm_neo_nefarious_s/swarmer>enm_indigenous_sand/swarmer"] = { "bad",
+    "rivet(3).log: Viceron, Nefarious Swarmer replaced by Indigenous Sandshark; alive 45 s after spawn while 6 other bots died; COMBAT CHECK FAILED" },
 }
 local function compat_t(write)
   local s = vstate()
@@ -2316,7 +2513,8 @@ end
 
 -- one variable, checked against the plug's generation: { addr, uid, actors, type, gen, single, group }
 function V.var(sc, idx, gen)
-  if not (sc and idx and gen) or gen == 0 or idx >= sc.max then return nil, "no such variable" end
+  if type(sc) ~= "table" or type(idx) ~= "number" or type(gen) ~= "number" or type(sc.max) ~= "number" then return nil, "no such variable" end
+  if gen == 0 or idx < 0 or idx >= sc.max then return nil, "no such variable" end
   local addr = sc.base + idx * V.VAR_SIZE
   local b = read_bytes(addr, V.VAR_SIZE)
   if not b or #b < V.VAR_SIZE then return nil, "unreadable" end
@@ -2415,7 +2613,7 @@ V.session = V.session or { said_blocked = false, said_ok = false, said_off = {},
 V.pending = V.pending or {}       -- dev 10.28: put-backs a frame-budget error interrupted (done first, before any read)
 
 function V.new_level(why)
-  V.lvl = { why = why, scans = 0, fac = {}, nodes = {}, order = {}, users = {}, tpl = {}, tpl_uid = {}, fac_spawns = {},
+  V.lvl = { why = why, scans = 0, fac = {}, nodes = {}, order = {}, users = {}, tpl = {}, tpl_uid = {}, fac_spawns = {}, fac_queue = {}, fac_queued = {},
             started = {}, arms = {}, queue = {}, spawned = {}, reg_checked = false, probe = { tried = 0, ok = 0 },
             logged = 0, next_scan = (SP.frame or 0) + V.FIRST_SCAN, frame0 = SP.frame or 0,
             -- dev 10.28
@@ -2553,11 +2751,46 @@ function V.probe(T)
   lvl.probe.tried = lvl.probe.tried + 1
   ss.probe_tried = ss.probe_tried + 1
   local a = V.actor(T.handle)
+  -- v0.62-DEV5: a template actor that answers only its NAME (no components before it is spawned) is classified by
+  -- that name when every known template of that name has one kind (V.kind_by_name; "enm_thugs4less_shoo" - ground
+  -- and jetpack thug - stays unknown). Round45: 40 asked, 0 answered with a bot class.
+  if a and a.name and not a.family then
+    local k = V.kind_by_name(a.name)
+    if k then a.family, a.class = k.family, k.class; ss.probe_named = (ss.probe_named or 0) + 1 end
+  end
   if a and a.family and a.name then
     lvl.probe.ok = lvl.probe.ok + 1
     ss.probe_ok = ss.probe_ok + 1
     V.learn(T, a, "template actor")
   end
+end
+-- v0.62-DEV5: name -> kind of every template the registry knows (built-in and the save's), only where unambiguous
+function V.kind_by_name(name)
+  local n = V.short(name); if not n or #n < 8 then return nil end
+  n = n:lower()
+  if not V._names or V._names_n ~= (V._reg_n or 0) then
+    local map = {}
+    for _, uid in ipairs(V.reg_uids()) do
+      local e = V.reg_get(uid)
+      if e and e.name and e.family and not e.mixed then
+        local key = V.short(e.name):lower()
+        local old = map[key]
+        if old == nil then map[key] = { family = e.family, class = e.class, name = e.name }
+        elseif old and old.family ~= e.family then map[key] = false end
+      end
+    end
+    V._names, V._names_n = map, (V._reg_n or 0)
+  end
+  local hit = V._names[n]
+  if hit ~= nil then return hit or nil end
+  local found
+  for key, v in pairs(V._names) do
+    if v and V.same_name(key, n) then
+      if found and found.family ~= v.family then return nil end
+      found = v
+    end
+  end
+  return found
 end
 
 -- ---- the listing ---------------------------------------------------------------------------------------
@@ -2570,22 +2803,48 @@ local function list_nodes(class)
 end
 
 -- the original value of spawner records still without one (kind: only those of that kind)
+local function read_one_orig(sc, r)
+  if r.orig or (r.reads or 0) >= 5 then return end
+  r.reads = (r.reads or 0) + 1
+  vguard(function()
+    local v = V.var(sc, r.var.idx, r.var.gen)
+    if v then
+      r.orig = { uid = v.uid, actors = v.actors, single = v.single, group = v.group }
+      V.lvl.dirty = true
+      if r.kind == "template" and v.group then r.kind = "group" end
+      if v.single then V.probe(V.tpl_of(v.actors, v.uid)) end
+    end
+  end)
+end
+V.read_one_orig = read_one_orig
+
 local function read_origs(sc, kind, t0)
   local lvl = V.lvl
   for _, r in ipairs(lvl.order) do
     if (kind == nil or r.kind == kind) and not r.orig and (r.reads or 0) < 5 then
-      r.reads = (r.reads or 0) + 1
-      vguard(function()
-        local v = V.var(sc, r.var.idx, r.var.gen)
-        if v then
-          r.orig = { uid = v.uid, actors = v.actors, single = v.single, group = v.group }
-          lvl.dirty = true
-          if r.kind == "template" and v.group then r.kind = "group" end
-          if v.single then V.probe(V.tpl_of(v.actors, v.uid)) end
-        end
-      end)
+      read_one_orig(sc, r)
       t0 = vpace(t0)
     end
+  end
+  return t0
+end
+
+-- dev 10.35: a SpawnFactory handle is already supplied by SpawnerSpawnEvent. Discover that one
+-- factory immediately instead of waiting for the next whole-level node listing. Its first spawn
+-- has happened (the event is post-spawn), but in enemy_compat=all mode this can still arm the
+-- factory for later waves. It never changes the actor that just spawned.
+function V.drain_factory_queue(sc)
+  local lvl = V.lvl
+  local t0 = clock_()
+  while #lvl.fac_queue > 0 do
+    local fac = table.remove(lvl.fac_queue, 1)
+    lvl.fac_queued[fac] = nil
+    local r = V.factory_rec(fac)
+    if r then
+      V.read_one_orig(sc, r)
+      if r.orig then vguard(V.plan_rec, sc, r) end
+    end
+    t0 = vpace(t0)
   end
   return t0
 end
@@ -2692,7 +2951,7 @@ function V.pool(group, excl, need_uid)
   local groups = V.groups_for(group)                                       -- dev 10.31: mixed movement in "all"
   for _, T in pairs(V.lvl.tpl) do
     local g = V.group_of(T)
-    if g and groups[g] and (T.uid or not need_uid) then
+    if g and groups[g] and (T.uid or not need_uid) and not (T.class and V.SOURCE_ONLY[T.class]) then
       local ok = true
       for _, n in ipairs(excl or {}) do if V.same_name(T.name, n) then ok = false end end
       if ok then out[#out + 1] = T end
@@ -2833,6 +3092,7 @@ function V.plan_rec(sc, r)
     if not (orig_T and orig_T.family) then return note_why(r, "kind not known yet (learned from its first spawn)") end
     group, role = V.group_of(orig_T)
     if not group then return note_why(r, "protected: " .. tostring(role)) end
+    if orig_T.class and V.SOURCE_ONLY[orig_T.class] then group = V.SOURCE_ONLY[orig_T.class] end   -- v0.62-DEV5
     excl[1] = orig_T.name
   end
   if not group then return end
@@ -3069,10 +3329,19 @@ function V.on_spawn_seen(f)
   if not lvl then return end
   local h = math.tointeger(tonumber(f.SpawnedHandle))
   local fac = math.tointeger(tonumber(f.SpawnFactory)) or 0
-  if fac ~= 0 then lvl.fac_spawns[fac] = (lvl.fac_spawns[fac] or 0) + 1 end
+  local enabled = V.enabled()
+  if fac ~= 0 then
+    lvl.fac_spawns[fac] = (lvl.fac_spawns[fac] or 0) + 1
+    -- The event provides the factory actor handle directly. Deduplicate it and defer all memory
+    -- reads/writes to V.pump, never inside the event callback.
+    if enabled and lvl.fac[fac] == nil and not lvl.fac_queued[fac] then
+      lvl.fac_queued[fac] = true
+      lvl.fac_queue[#lvl.fac_queue + 1] = fac
+    end
+  end
   if not h or lvl.spawned[h] then return end
   lvl.spawned[h] = true
-  if V.enabled() and #lvl.queue < V.QUEUE_CAP then
+  if enabled and #lvl.queue < V.QUEUE_CAP then
     lvl.queue[#lvl.queue + 1] = { h = h, fac = fac, loc = math.tointeger(tonumber(f.SpawnLocation)), idx = math.tointeger(tonumber(f.SpawnIndex)) }
   end
 end
@@ -3605,6 +3874,9 @@ function V.pump(sc)
   if not V.drain_pending() then return end                                 -- put-backs first: nothing is read before
   local lvl = V.lvl
   local t0 = clock_()
+  -- Process event-discovered factories before the expensive full-level listing. The spawn event
+  -- is already after one spawn, but later spawns from a multi-wave factory can now be randomized.
+  if #lvl.fac_queue > 0 then V.drain_factory_queue(sc); t0 = clock_() end
   if lvl.scan_due then
     V.scan(sc)                                                              -- memoized: a restart continues it
     lvl.scan_due = false
@@ -3680,18 +3952,30 @@ function V.tick(frame, ready)
   local lvl = V.lvl
   if not V.enabled() then
     V.job = nil
-    if #lvl.arms > 0 then V.put_back_all("Enemy Randomizer off"); lvl.arms = {} ; for _, r in ipairs(lvl.order) do r.tried = nil end end
+    -- v0.62-DEV14: not during a load (ready is false while the game thread is not pumping)
+    if #lvl.arms > 0 and ready then V.put_back_all("Enemy Randomizer off"); lvl.arms = {} ; for _, r in ipairs(lvl.order) do r.tried = nil end end
     if #V.pending > 0 and ready then pcall(V.drain_pending) end
-    lvl.queue = {}
+    lvl.queue, lvl.fac_queue, lvl.fac_queued = {}, {}, {}
     return
   end
   if not ready then return end
   V.migrate()
   V.notes_tick(frame)
-  -- dev 10.29: one of the two clients switched off: its changes go back (the other's stay)
+  -- dev 10.34: cache feature switches once per role per frame. The old loop called
+  -- V.role_on -> SP.enabled separately for every armed spawner; with 100+ armed variables
+  -- this repeated the same config/state lookup dozens or hundreds of times in one frame.
+  -- rivet(3).log repeatedly hit the 8 ms budget at V.role_on (line 1821) while levels had
+  -- large arm lists. Keep the role decision stable for this tick and only evaluate used roles.
+  local role_enabled = {}
   for _, A in ipairs(lvl.arms) do
-    if not A.restored and not V.role_on(A.role or "enemy") then
-      V.put_back(A, (A.role == "boss" and "Boss" or "Enemy") .. " Randomizer off")
+    local role = A.role or "enemy"
+    local enabled = role_enabled[role]
+    if enabled == nil then
+      enabled = V.role_on(role)
+      role_enabled[role] = enabled
+    end
+    if not A.restored and not enabled then
+      V.put_back(A, (role == "boss" and "Boss" or "Enemy") .. " Randomizer off")
       A.rec.tried = nil
     end
   end
@@ -3723,7 +4007,7 @@ function V.tick(frame, ready)
     return
   end
   local due = frame >= lvl.next_scan
-  local work = due or #V.pending > 0 or (lvl.scans > 0 and (#lvl.queue > 0 or lvl.dirty or lvl.arm_running))
+  local work = due or #V.pending > 0 or #lvl.fac_queue > 0 or (lvl.scans > 0 and (#lvl.queue > 0 or lvl.dirty or lvl.arm_running))
                or (#lvl.deferred > 0 and frame >= lvl.next_scan)
   if not work then return end
   local sc, why = V.scene()
